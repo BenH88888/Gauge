@@ -1,0 +1,201 @@
+# Health App
+
+Prototype that combines three pieces:
+
+1. **Benefits engine** that, given a member and a procedure, applies a
+   plan's deductible, coinsurance, copays, and OOP max to estimate the
+   member's out-of-pocket cost.
+2. **Machine-learning cost predictor** that takes a person's profile
+   (age, sex, BMI, children, smoker status, region) and predicts annual
+   medical charges with an 80% prediction interval. A what-if simulator
+   sweeps any feature and shows how the prediction moves. Predictions
+   can be piped through a plan to produce annual out-of-pocket
+   estimates.
+3. **Insurance document chatbot** that ingests a plan PDF, builds a
+   retrieval index, and answers questions in plain English with
+   page-level citations back to the source document.
+
+## Disclaimer
+
+Estimates produced by this prototype are illustrative only. Real
+benefits and real costs depend on actual plan documents, claim
+adjudication, provider contracts, and personal health history. Members
+should confirm coverage and costs with their insurer.
+
+## ML pipeline overview
+
+* **Model:** three scikit-learn `HistGradientBoostingRegressor`s trained
+  with `loss="quantile"` at the 10th, 50th, and 90th percentiles. The
+  median is the point estimate; the 10/90 pair gives an 80% prediction
+  interval. Healthcare cost distributions are heavy-tailed, so intervals
+  are much more honest than a single number.
+* **Features:** age, sex, bmi, children, smoker, region. Categorical
+  features are one-hot encoded via a `ColumnTransformer`; numerics pass
+  through.
+* **Data:** synthetic Kaggle-insurance-shaped dataset, deterministically
+  generated. A `load_csv` path is provided so dropping in the real
+  Kaggle file is one function call away.
+* **What-if simulator:** holds a baseline feature vector fixed, varies
+  one feature across a list of values, and predicts the curve in a
+  single batched call. Optionally annotates each point with annual
+  cost-share under a chosen plan.
+* **Bridge to benefits engine:** `apply_plan_to_annual_spend` runs the
+  predicted annual charges through the plan's deductible, coinsurance,
+  and OOP max to estimate annual out-of-pocket.
+
+## Document chatbot pipeline
+
+* **PDF extraction** via pypdf, page by page.
+* **Chunking:** sliding-window with overlap, each chunk records the
+  pages it spans so citations point back to the right page.
+* **Retrieval:** TF-IDF + cosine similarity (scikit-learn). One index
+  per uploaded document, which keeps vocabulary tight and tuned to
+  domain-specific language.
+* **LLM:** pluggable. `EchoLLM` is the default (no API key required;
+  returns retrieved excerpts formatted as a coherent answer). Install
+  the `anthropic` or `openai` extra and set the matching environment
+  variable to upgrade to a real LLM:
+
+  ```bash
+  pip install -e ".[anthropic]"
+  export ANTHROPIC_API_KEY=...
+  # or
+  pip install -e ".[openai]"
+  export OPENAI_API_KEY=...
+  ```
+
+  The backend auto-detects whichever is available and reports
+  `llm_used` on every chat response.
+
+## Running the app
+
+You need two terminals: one for the Python API, one for the React frontend.
+
+**Terminal 1: backend**
+
+```bash
+pip install -e ".[dev]"
+uvicorn health_app.main:app --reload
+```
+
+On first startup the predictor trains and caches the model under
+`~/.cache/health_app/`. Subsequent starts load from the cache.
+
+**Terminal 2: frontend**
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Then open `http://localhost:5173` in your browser. The page shows sliders
+for age, BMI, children, plus toggles for sex and smoker and selectors for
+region and plan. Predictions and the what-if curve update live as you
+move the sliders.
+
+The frontend talks to the backend at `http://localhost:8000` by default.
+Override at build time with the `VITE_API_BASE` env var if you deploy
+the backend elsewhere.
+
+For a production build of the frontend:
+
+```bash
+cd frontend
+npm run build
+# Output is in frontend/dist; serve it with any static file host.
+```
+
+### Example calls
+
+```bash
+# Predict annual charges and annual OOP under a plan
+curl -X POST http://127.0.0.1:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "features": {
+      "age": 40, "sex": "male", "bmi": 32.0,
+      "children": 2, "smoker": "yes", "region": "southeast"
+    },
+    "plan_id": "ppo_gold"
+  }'
+
+# What-if: sweep age from 25 to 64 under PPO Gold
+curl -X POST http://127.0.0.1:8000/whatif \
+  -H "Content-Type: application/json" \
+  -d '{
+    "baseline": {
+      "age": 40, "sex": "male", "bmi": 27.0,
+      "children": 0, "smoker": "no", "region": "northeast"
+    },
+    "feature": "age",
+    "values": [25, 35, 45, 55, 64],
+    "plan_id": "ppo_gold"
+  }'
+
+# Per-procedure estimate (benefits engine)
+curl -X POST http://127.0.0.1:8000/estimate \
+  -H "Content-Type: application/json" \
+  -d '{"member_id":"m1","procedure_code":"99213","in_network":true}'
+```
+
+## Running the tests
+
+```bash
+pytest                 # full suite
+pytest -m unit         # fast logic checks
+pytest -m integration  # API endpoint checks
+pytest -m e2e          # multi-step journeys
+```
+
+The full suite is around 2 seconds (70 tests). The predictor is fit
+once per session via a session-scoped fixture so the ML training cost
+is paid exactly once.
+
+## Project layout
+
+```
+src/health_app/
+  benefits/
+    models.py        Pydantic domain models (Plan, Member, Procedure, ...)
+    calculator.py    Per-procedure cost-share math
+    repository.py    CatalogRepository protocol + in-memory implementation
+    seed.py          Sample plans, members, procedures
+  predictor/
+    schemas.py       PredictionFeatures (request schema)
+    dataset.py       Synthetic data generator + CSV loader
+    model.py         CostPredictor (3-quantile gradient boosting)
+    whatif.py        What-if sweep with validation
+    annual_cost.py   Predicted charges -> annual member/plan share
+  docchat/
+    schemas.py       Chunk, DocumentMeta, Citation, ChatRequest/Response
+    extractor.py     PDF text extraction (pypdf)
+    chunker.py       Sliding-window chunker with page provenance
+    index.py         TfidfRetrievalIndex (sklearn TF-IDF + cosine)
+    llm.py           EchoLLM + pluggable Anthropic/OpenAI clients
+    store.py         InMemoryDocumentStore (thread-safe)
+    service.py       Upload + ask orchestration
+  api.py             Unified FastAPI app factory with CORS
+  main.py            Module entry point with model load-or-train
+frontend/
+  src/
+    App.tsx          Top-level tabs (Cost predictor, Document chat)
+    api.ts           Typed client for the FastAPI backend
+    components/      Predictor (form, results, what-if chart) and
+                     Docchat (PDF upload, chat panel, citations) UI
+tests/
+  unit/              Logic tests (models, calculator, dataset,
+                     predictor, whatif, annual_cost)
+  integration/       Endpoint tests via TestClient
+  e2e/               Multi-step user journey tests
+```
+
+## What's next
+
+* Real LLM backend: install the `anthropic` or `openai` extra and set
+  the matching API key to replace `EchoLLM`.
+* Persistent document store (SQLite + on-disk PDFs) so uploads survive
+  a restart.
+* Wider, more honest prediction intervals via conformal prediction.
+* Train on real MEPS data instead of the synthetic dataset for a more
+  realistic predictor.

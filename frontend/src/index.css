@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Native range inputs look terrible by default; bring them in line. */
+input[type="range"] {
+  @apply h-2 w-full cursor-pointer appearance-none rounded-full bg-slate-200;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  @apply h-5 w-5 rounded-full bg-brand-600 shadow ring-2 ring-white;
+}
+input[type="range"]::-moz-range-thumb {
+  @apply h-5 w-5 rounded-full border-0 bg-brand-600 shadow;
+}

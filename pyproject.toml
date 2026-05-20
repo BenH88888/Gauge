@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "health-app"
+version = "0.2.0"
+description = "Health insurance app: benefits engine plus ML cost predictor (prototype)."
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "pydantic>=2.6",
+    "uvicorn>=0.27",
+    "scikit-learn>=1.4",
+    "pandas>=2.0",
+    "numpy>=1.26",
+    "joblib>=1.3",
+    "pypdf>=4.0",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.1",
+    "httpx>=0.27",
+    "reportlab>=4.0",
+]
+anthropic = ["anthropic>=0.30"]
+openai = ["openai>=1.30"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "unit: fast, isolated logic tests",
+    "integration: FastAPI endpoint tests with TestClient",
+    "e2e: multi-step user journey tests",
+]
