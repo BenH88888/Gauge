@@ -1,23 +1,32 @@
-"""Module entry point: `uvicorn health_app.main:app`.
+"""Module entry point: ``uvicorn health_app.main:app``.
 
 Trains (or loads from cache) the cost predictor on startup, then wires
-it to the FastAPI app along with the seeded benefits repository.
+it to the FastAPI app along with the seeded benefits repository and
+SQLite-backed persistence stores.
 
-Dataset resolution order:
-
-1. `HEALTH_APP_DATASET_CSV` env var, if set, must point to a CSV.
-2. `HEALTH_APP_MEPS_DTA` env var, if set, must point to a MEPS .dta file.
-3. `data/meps_hc233.dta` if present (preferred over Kaggle).
-4. `data/insurance.csv` if present.
+Dataset resolution order
+------------------------
+1. ``HEALTH_APP_DATASET_CSV`` env var, if set, must point to a CSV.
+2. ``HEALTH_APP_MEPS_DTA`` env var, if set, must point to a MEPS .dta file.
+3. ``data/meps_hc233.dta`` if present (preferred over Kaggle).
+4. ``data/insurance.csv`` if present.
 5. Synthetic Kaggle-shaped dataset, generated deterministically.
 
 The model cache is keyed by the chosen data source so swapping inputs
 forces a clean retrain instead of silently reusing the old model.
+
+Persistence
+-----------
+Sessions and uploaded documents are stored in a SQLite database at
+``~/.cache/health_app/health_app.db`` by default.  Override the path
+with the ``HEALTH_APP_DB_PATH`` environment variable.  The in-memory
+stores are used instead when ``HEALTH_APP_NO_PERSIST=1`` is set.
 """
 
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 from pathlib import Path
 
@@ -25,25 +34,55 @@ from health_app.api import create_app
 from health_app.benefits.seed import build_default_repository
 from health_app.docchat.llm import auto_select_llm
 from health_app.docchat.service import DocumentChatService
+from health_app.docchat.sqlite_store import SqliteDocumentStore
+from health_app.docchat.store import InMemoryDocumentStore
 from health_app.plan_extract.extractor import PlanExtractor
 from health_app.predictor.dataset import load_dataset
 from health_app.predictor.meps import load_meps
 from health_app.predictor.model import CostPredictor
+from health_app.session.sqlite_store import SqliteSessionStore
 from health_app.session.store import InMemorySessionStore
 
-# Paths to optional local datasets. Resolved relative to this file so they
-# work regardless of the current working directory.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+
+# Datasets — resolved relative to the repo root so they work regardless of
+# the current working directory.
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _LOCAL_CSV_PATH = _REPO_ROOT / "data" / "insurance.csv"
 _LOCAL_MEPS_PATH = _REPO_ROOT / "data" / "meps_hc233.dta"
 _LOCAL_MEPS_SAQ_PATH = _REPO_ROOT / "data" / "meps_hc236.dta"
 
+# Model cache directory.
 _CACHE_DIR = Path(
     os.environ.get(
         "HEALTH_APP_CACHE_DIR",
         str(Path.home() / ".cache" / "health_app"),
     )
 )
+
+# SQLite database path.
+_DB_PATH = Path(
+    os.environ.get(
+        "HEALTH_APP_DB_PATH",
+        str(_CACHE_DIR / "health_app.db"),
+    )
+)
+
+# When set to "1" the in-memory stores are used and nothing is persisted.
+_NO_PERSIST = os.environ.get("HEALTH_APP_NO_PERSIST", "0") == "1"
+
+# ---------------------------------------------------------------------------
+# Dataset resolution
+# ---------------------------------------------------------------------------
 
 # Marker used in the source tag to dispatch to the right loader.
 _KIND_MEPS = "meps"
@@ -69,18 +108,22 @@ def _resolve_dataset_source() -> tuple[str, str, Path | None, Path | None]:
     env_csv = os.environ.get("HEALTH_APP_DATASET_CSV")
     if env_csv:
         return _KIND_CSV, f"env_csv:{env_csv}", Path(env_csv), None
+
     env_meps = os.environ.get("HEALTH_APP_MEPS_DTA")
     env_saq = os.environ.get("HEALTH_APP_MEPS_SAQ")
     if env_meps:
         saq = Path(env_saq) if env_saq else None
         tag = f"env_meps:{env_meps}|saq:{env_saq or ''}"
         return _KIND_MEPS, tag, Path(env_meps), saq
+
     if _LOCAL_MEPS_PATH.exists():
         saq = _LOCAL_MEPS_SAQ_PATH if _LOCAL_MEPS_SAQ_PATH.exists() else None
         tag = f"meps:{_LOCAL_MEPS_PATH}|saq:{saq or ''}"
         return _KIND_MEPS, tag, _LOCAL_MEPS_PATH, saq
+
     if _LOCAL_CSV_PATH.exists():
         return _KIND_CSV, f"csv:{_LOCAL_CSV_PATH}", _LOCAL_CSV_PATH, None
+
     return _KIND_SYNTHETIC, "synthetic", None, None
 
 
@@ -118,8 +161,13 @@ def _load_or_train_predictor() -> CostPredictor:
     kind, source_tag, path, saq_path = _resolve_dataset_source()
     cache_path = _cache_path_for(source_tag)
 
+    _log_dataset_source(kind, path, saq_path)
+
     if cache_path.exists():
+        logger.info("Loading cached model from %s", cache_path)
         return CostPredictor.load(cache_path)
+
+    logger.info("No cached model found — training now (this may take a minute)…")
 
     if kind == _KIND_MEPS:
         assert path is not None
@@ -129,20 +177,140 @@ def _load_or_train_predictor() -> CostPredictor:
     else:
         df = load_dataset()
 
+    logger.info("Loaded %d training rows — fitting model…", len(df))
     predictor = CostPredictor()
     predictor.fit(df)
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     predictor.save(cache_path)
+    logger.info("Model trained and cached at %s", cache_path)
     return predictor
 
 
+def _log_dataset_source(
+    kind: str, path: Path | None, saq_path: Path | None
+) -> None:
+    """Emit an INFO log describing the chosen data source.
+
+    Parameters
+    ----------
+    kind : str
+        One of ``_KIND_MEPS``, ``_KIND_CSV``, or ``_KIND_SYNTHETIC``.
+    path : Path or None
+        Primary dataset file path, or ``None`` for synthetic.
+    saq_path : Path or None
+        SAQ supplement path (MEPS only), or ``None``.
+
+    Returns
+    -------
+    None
+    """
+    if kind == _KIND_MEPS:
+        saq_note = f" + SAQ {saq_path}" if saq_path else " (no SAQ — BMI may be missing)"
+        logger.info("Dataset: MEPS  %s%s", path, saq_note)
+    elif kind == _KIND_CSV:
+        logger.info("Dataset: CSV   %s", path)
+    else:
+        logger.info(
+            "Dataset: synthetic (place data/meps_hc233.dta or data/insurance.csv"
+            " in the repo root for real data)"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Persistence stores
+# ---------------------------------------------------------------------------
+
+
+def _make_session_store() -> SqliteSessionStore | InMemorySessionStore:
+    """Return the appropriate session store based on env configuration.
+
+    Returns
+    -------
+    SqliteSessionStore or InMemorySessionStore
+        ``SqliteSessionStore`` by default; ``InMemorySessionStore`` when
+        ``HEALTH_APP_NO_PERSIST=1``.
+    """
+    if _NO_PERSIST:
+        logger.info("Session store: in-memory (HEALTH_APP_NO_PERSIST=1)")
+        return InMemorySessionStore()
+    logger.info("Session store: SQLite at %s", _DB_PATH)
+    return SqliteSessionStore(_DB_PATH)
+
+
+def _make_document_store() -> SqliteDocumentStore | InMemoryDocumentStore:
+    """Return the appropriate document store based on env configuration.
+
+    Returns
+    -------
+    SqliteDocumentStore or InMemoryDocumentStore
+        ``SqliteDocumentStore`` by default; ``InMemoryDocumentStore`` when
+        ``HEALTH_APP_NO_PERSIST=1``.
+    """
+    if _NO_PERSIST:
+        logger.info("Document store: in-memory (HEALTH_APP_NO_PERSIST=1)")
+        return InMemoryDocumentStore()
+    logger.info("Document store: SQLite at %s", _DB_PATH)
+    return SqliteDocumentStore(_DB_PATH)
+
+
+# ---------------------------------------------------------------------------
+# Application bootstrap
+# ---------------------------------------------------------------------------
+
 _llm = auto_select_llm()
-_chat_service = DocumentChatService(llm=_llm)
+logger.info("LLM backend: %s", _llm.name)
+
+_document_store = _make_document_store()
+_chat_service = DocumentChatService(store=_document_store, llm=_llm)
 
 app = create_app(
     repository=build_default_repository(),
     predictor=_load_or_train_predictor(),
     chat_service=_chat_service,
-    session_store=InMemorySessionStore(),
+    session_store=_make_session_store(),
     plan_extractor=PlanExtractor(llm=_llm),
 )
+
+# ---------------------------------------------------------------------------
+# Static file serving (Docker / production)
+#
+# When the built React SPA is present at frontend/dist, mount it so that
+# a single container can serve both the API and the UI.  In local dev the
+# Vite dev server handles the frontend and this block is skipped.
+# ---------------------------------------------------------------------------
+
+_FRONTEND_DIST = _REPO_ROOT / "frontend" / "dist"
+
+if _FRONTEND_DIST.exists():
+    from fastapi.responses import FileResponse
+    from fastapi.staticfiles import StaticFiles
+
+    _ASSETS_DIR = _FRONTEND_DIST / "assets"
+    if _ASSETS_DIR.exists():
+        app.mount(
+            "/assets",
+            StaticFiles(directory=str(_ASSETS_DIR)),
+            name="assets",
+        )
+        logger.info("Serving frontend assets from %s", _ASSETS_DIR)
+
+    _INDEX_HTML = _FRONTEND_DIST / "index.html"
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def _serve_spa(full_path: str) -> FileResponse:  # noqa: ARG001
+        """Catch-all route: return index.html for any unknown path.
+
+        Parameters
+        ----------
+        full_path : str
+            Any URL path not matched by an API route.
+
+        Returns
+        -------
+        FileResponse
+            The React SPA entry point, allowing client-side routing to take
+            over.
+        """
+        return FileResponse(str(_INDEX_HTML))
+
+    logger.info("SPA catch-all active — serving %s", _INDEX_HTML)

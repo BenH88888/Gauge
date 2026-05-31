@@ -1,33 +1,80 @@
-"""In-memory document store with one TF-IDF index per document.
+"""Document store interface, in-memory implementation, and shared types.
 
-Persistence is intentionally out of scope for this prototype. Restarting
-the backend wipes the uploaded corpus, and clients are expected to
-re-upload as needed. A SQLite-backed store would slot in cleanly behind
-the same public methods.
+``StoredDocument`` and the ``DocumentStore`` Protocol are defined here so
+both the in-memory and SQLite implementations can share them without
+circular imports.
 """
 
 from __future__ import annotations
 
 import threading
 from dataclasses import dataclass
+from typing import Protocol, runtime_checkable
 
 from health_app.docchat.index import TfidfRetrievalIndex
 from health_app.docchat.schemas import Chunk, DocumentMeta
 
 
 @dataclass
-class _StoredDocument:
+class StoredDocument:
+    """A document held in a store, with its chunks and retrieval index.
+
+    Parameters
+    ----------
+    meta : DocumentMeta
+        Document metadata (ID, filename, page/chunk counts, upload time).
+    chunks : list[Chunk]
+        Text chunks extracted from the document.
+    index : TfidfRetrievalIndex
+        Pre-built retrieval index for answering questions against this doc.
+    """
+
     meta: DocumentMeta
     chunks: list[Chunk]
     index: TfidfRetrievalIndex
 
 
+# Keep the old private name as an alias for any code that used it directly.
+_StoredDocument = StoredDocument
+
+
+@runtime_checkable
+class DocumentStore(Protocol):
+    """Structural protocol satisfied by any document store implementation.
+
+    Both :class:`InMemoryDocumentStore` and
+    :class:`~health_app.docchat.sqlite_store.SqliteDocumentStore` satisfy
+    this protocol without explicit inheritance.
+    """
+
+    def add(self, meta: DocumentMeta, chunks: list[Chunk]) -> None:
+        """Insert or replace a document and build its retrieval index."""
+        ...
+
+    def get(self, document_id: str) -> StoredDocument | None:
+        """Return the stored document for ``document_id``, or ``None``."""
+        ...
+
+    def list_meta(self) -> list[DocumentMeta]:
+        """Return metadata for all stored documents."""
+        ...
+
+    def delete(self, document_id: str) -> bool:
+        """Remove a document; return ``True`` if it existed."""
+        ...
+
+
 class InMemoryDocumentStore:
-    """Thread-safe in-memory store keyed by `document_id`."""
+    """Thread-safe in-memory store keyed by ``document_id``.
+
+    Sessions are lost when the server restarts. A SQLite-backed store
+    (:class:`~health_app.docchat.sqlite_store.SqliteDocumentStore`) uses
+    the same public interface and survives restarts.
+    """
 
     def __init__(self) -> None:
         """Initialise an empty, thread-safe document store."""
-        self._docs: dict[str, _StoredDocument] = {}
+        self._docs: dict[str, StoredDocument] = {}
         self._lock = threading.Lock()
 
     def add(self, meta: DocumentMeta, chunks: list[Chunk]) -> None:
@@ -42,11 +89,11 @@ class InMemoryDocumentStore:
         """
         index = TfidfRetrievalIndex(chunks)
         with self._lock:
-            self._docs[meta.document_id] = _StoredDocument(
+            self._docs[meta.document_id] = StoredDocument(
                 meta=meta, chunks=chunks, index=index
             )
 
-    def get(self, document_id: str) -> _StoredDocument | None:
+    def get(self, document_id: str) -> StoredDocument | None:
         """Return the stored document for ``document_id``, or ``None``.
 
         Parameters
@@ -56,7 +103,7 @@ class InMemoryDocumentStore:
 
         Returns
         -------
-        _StoredDocument or None
+        StoredDocument or None
             The stored document object, or ``None`` if not found.
         """
         with self._lock:

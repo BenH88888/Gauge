@@ -1,0 +1,45 @@
+# Version control
+.git
+.gitignore
+
+# Python artefacts
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Test artefacts
+.pytest_cache/
+.coverage
+htmlcov/
+pytest-cache-files-*
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Frontend build artefacts and local installs
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Local model cache and database (populated at runtime, not baked in)
+.cache/
+*.db
+
+# Editor / OS noise
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Documentation
+*.md

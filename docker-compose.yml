@@ -1,0 +1,19 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persists the SQLite database and trained model cache across restarts.
+      - health_app_data:/data
+    environment:
+      # Pass through an Anthropic or OpenAI key for real LLM-powered
+      # plan extraction and document Q&A. Without a key the app falls back
+      # to EchoLLM, which works but returns raw text excerpts.
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    restart: unless-stopped
+
+volumes:
+  health_app_data:
+    driver: local

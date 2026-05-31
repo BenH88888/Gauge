@@ -13,7 +13,7 @@ from health_app.docchat.schemas import (
     Citation,
     DocumentMeta,
 )
-from health_app.docchat.store import InMemoryDocumentStore
+from health_app.docchat.store import DocumentStore, InMemoryDocumentStore
 
 CITATION_SNIPPET_LEN = 240
 
@@ -23,21 +23,25 @@ class DocumentChatService:
 
     def __init__(
         self,
-        store: InMemoryDocumentStore | None = None,
+        store: DocumentStore | None = None,
         llm: LLMClient | None = None,
     ) -> None:
         """Initialise the service with a document store and LLM client.
 
         Parameters
         ----------
-        store : InMemoryDocumentStore or None, optional
-            Document store to use. A fresh :class:`InMemoryDocumentStore`
-            is created when not supplied.
+        store : DocumentStore or None, optional
+            Document store to use.  Any object satisfying the
+            :class:`~health_app.docchat.store.DocumentStore` protocol is
+            accepted — both :class:`~health_app.docchat.store.InMemoryDocumentStore`
+            and :class:`~health_app.docchat.sqlite_store.SqliteDocumentStore`
+            qualify.  A fresh :class:`InMemoryDocumentStore` is created
+            when not supplied.
         llm : LLMClient or None, optional
             LLM backend for answering questions. Defaults to
             :class:`EchoLLM` when not supplied.
         """
-        self.store = store or InMemoryDocumentStore()
+        self.store: DocumentStore = store or InMemoryDocumentStore()
         self.llm = llm or EchoLLM()
 
     def upload_pdf(self, filename: str, pdf_bytes: bytes) -> DocumentMeta:
