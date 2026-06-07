@@ -33,9 +33,7 @@ def _baseline_payload() -> dict:
 
 class TestPredict:
     def test_predict_returns_interval(self, client: TestClient) -> None:
-        response = client.post(
-            "/predict", json={"features": _baseline_payload()}
-        )
+        response = client.post("/predict", json={"features": _baseline_payload()})
         assert response.status_code == 200
         body = response.json()
         pred = body["prediction"]
@@ -47,9 +45,7 @@ class TestPredict:
         assert pred["conformal_calibrated"] is True
         assert pred["calibration_coverage"] == pytest.approx(0.80)
 
-    def test_predict_with_plan_returns_oop_interval(
-        self, client: TestClient
-    ) -> None:
+    def test_predict_with_plan_returns_oop_interval(self, client: TestClient) -> None:
         response = client.post(
             "/predict",
             json={"features": _baseline_payload(), "plan_id": "ppo_gold"},
@@ -71,16 +67,12 @@ class TestPredict:
         )
         assert response.status_code == 404
 
-    def test_predict_validation_rejects_bad_age(
-        self, client: TestClient
-    ) -> None:
+    def test_predict_validation_rejects_bad_age(self, client: TestClient) -> None:
         bad = _baseline_payload() | {"age": -5}
         response = client.post("/predict", json={"features": bad})
         assert response.status_code == 422
 
-    def test_predict_validation_rejects_bad_region(
-        self, client: TestClient
-    ) -> None:
+    def test_predict_validation_rejects_bad_region(self, client: TestClient) -> None:
         bad = _baseline_payload() | {"region": "atlantis"}
         response = client.post("/predict", json={"features": bad})
         assert response.status_code == 422
@@ -101,9 +93,7 @@ class TestWhatIf:
         assert body["feature"] == "age"
         assert [p["value"] for p in body["points"]] == [25, 40, 55]
 
-    def test_whatif_without_plan_has_no_oop_interval(
-        self, client: TestClient
-    ) -> None:
+    def test_whatif_without_plan_has_no_oop_interval(self, client: TestClient) -> None:
         response = client.post(
             "/whatif",
             json={
@@ -116,9 +106,7 @@ class TestWhatIf:
         for point in response.json()["points"]:
             assert point["oop_interval"] is None
 
-    def test_whatif_with_plan_includes_oop_interval(
-        self, client: TestClient
-    ) -> None:
+    def test_whatif_with_plan_includes_oop_interval(self, client: TestClient) -> None:
         response = client.post(
             "/whatif",
             json={

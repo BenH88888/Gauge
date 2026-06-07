@@ -48,23 +48,39 @@ def test_load_meps_maps_codes_to_schema(tmp_path) -> None:
     rows = [
         # Two adults in one family with one kid; one adult in another family.
         {
-            MEPS_AGE: 40, MEPS_SEX: 1, MEPS_REGION: 1,
-            MEPS_BMI: 27.5, MEPS_SMOKER: 2, MEPS_FAMID: "f1",
+            MEPS_AGE: 40,
+            MEPS_SEX: 1,
+            MEPS_REGION: 1,
+            MEPS_BMI: 27.5,
+            MEPS_SMOKER: 2,
+            MEPS_FAMID: "f1",
             MEPS_TOTEXP: 5400.0,
         },
         {
-            MEPS_AGE: 38, MEPS_SEX: 2, MEPS_REGION: 1,
-            MEPS_BMI: 30.0, MEPS_SMOKER: 1, MEPS_FAMID: "f1",
+            MEPS_AGE: 38,
+            MEPS_SEX: 2,
+            MEPS_REGION: 1,
+            MEPS_BMI: 30.0,
+            MEPS_SMOKER: 1,
+            MEPS_FAMID: "f1",
             MEPS_TOTEXP: 12000.0,
         },
         {
-            MEPS_AGE: 8, MEPS_SEX: 1, MEPS_REGION: 1,
-            MEPS_BMI: -1.0, MEPS_SMOKER: -1, MEPS_FAMID: "f1",
+            MEPS_AGE: 8,
+            MEPS_SEX: 1,
+            MEPS_REGION: 1,
+            MEPS_BMI: -1.0,
+            MEPS_SMOKER: -1,
+            MEPS_FAMID: "f1",
             MEPS_TOTEXP: 1200.0,
         },
         {
-            MEPS_AGE: 55, MEPS_SEX: 1, MEPS_REGION: 4,
-            MEPS_BMI: 32.0, MEPS_SMOKER: 2, MEPS_FAMID: "f2",
+            MEPS_AGE: 55,
+            MEPS_SEX: 1,
+            MEPS_REGION: 4,
+            MEPS_BMI: 32.0,
+            MEPS_SMOKER: 2,
+            MEPS_FAMID: "f2",
             MEPS_TOTEXP: 9800.0,
         },
     ]
@@ -73,12 +89,21 @@ def test_load_meps_maps_codes_to_schema(tmp_path) -> None:
 
     df = load_meps(path)
     assert list(df.columns) == [
-        "age", "sex", "bmi", "children", "smoker", "region", "charges",
+        "age",
+        "sex",
+        "bmi",
+        "children",
+        "smoker",
+        "region",
+        "charges",
     ]
     assert len(df) == 3  # the child row was filtered out
     assert set(df["sex"].unique()) <= {"male", "female"}
     assert set(df["region"].unique()) <= {
-        "northeast", "midwest", "south", "west",
+        "northeast",
+        "midwest",
+        "south",
+        "west",
     }
     assert set(df["smoker"].unique()) <= {"yes", "no"}
     # Adults in family f1 should have children=1 (one kid in their family).
@@ -92,20 +117,32 @@ def test_load_meps_drops_rows_with_missing_required(tmp_path) -> None:
     rows = [
         # Valid adult.
         {
-            MEPS_AGE: 30, MEPS_SEX: 2, MEPS_REGION: 2,
-            MEPS_BMI: 25.0, MEPS_SMOKER: 2, MEPS_FAMID: "a",
+            MEPS_AGE: 30,
+            MEPS_SEX: 2,
+            MEPS_REGION: 2,
+            MEPS_BMI: 25.0,
+            MEPS_SMOKER: 2,
+            MEPS_FAMID: "a",
             MEPS_TOTEXP: 2000.0,
         },
         # Adult with missing BMI: should be dropped.
         {
-            MEPS_AGE: 45, MEPS_SEX: 1, MEPS_REGION: 2,
-            MEPS_BMI: -7.0, MEPS_SMOKER: 2, MEPS_FAMID: "b",
+            MEPS_AGE: 45,
+            MEPS_SEX: 1,
+            MEPS_REGION: 2,
+            MEPS_BMI: -7.0,
+            MEPS_SMOKER: 2,
+            MEPS_FAMID: "b",
             MEPS_TOTEXP: 3000.0,
         },
         # Adult with missing smoker: should be dropped.
         {
-            MEPS_AGE: 50, MEPS_SEX: 1, MEPS_REGION: 3,
-            MEPS_BMI: 27.0, MEPS_SMOKER: -9, MEPS_FAMID: "c",
+            MEPS_AGE: 50,
+            MEPS_SEX: 1,
+            MEPS_REGION: 3,
+            MEPS_BMI: 27.0,
+            MEPS_SMOKER: -9,
+            MEPS_FAMID: "c",
             MEPS_TOTEXP: 4500.0,
         },
     ]
@@ -121,8 +158,12 @@ def test_load_meps_clamps_negative_charges_to_zero(tmp_path) -> None:
     """Defensive: a negative TOTEXP value (shouldn't happen in MEPS) is clamped."""
     rows = [
         {
-            MEPS_AGE: 35, MEPS_SEX: 1, MEPS_REGION: 1,
-            MEPS_BMI: 26.0, MEPS_SMOKER: 2, MEPS_FAMID: "x",
+            MEPS_AGE: 35,
+            MEPS_SEX: 1,
+            MEPS_REGION: 1,
+            MEPS_BMI: 26.0,
+            MEPS_SMOKER: 2,
+            MEPS_FAMID: "x",
             MEPS_TOTEXP: -100.0,
         },
     ]
@@ -274,9 +315,9 @@ def test_load_meps_saq_with_no_bmi_columns_raises_value_error(tmp_path) -> None:
         }
     )
     # SAQ has DUPERSID but no BMI column.
-    saq_rows = pd.DataFrame(
-        [{"DUPERSID": "p1", "UNRELATED_COL": 42.0}]
-    ).astype({"UNRELATED_COL": np.float64})
+    saq_rows = pd.DataFrame([{"DUPERSID": "p1", "UNRELATED_COL": 42.0}]).astype(
+        {"UNRELATED_COL": np.float64}
+    )
 
     main_path = tmp_path / "main.dta"
     saq_path = tmp_path / "saq_no_bmi.dta"

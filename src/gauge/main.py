@@ -186,9 +186,7 @@ def _load_or_train_predictor() -> CostPredictor:
     return predictor
 
 
-def _log_dataset_source(
-    kind: str, path: Path | None, saq_path: Path | None
-) -> None:
+def _log_dataset_source(kind: str, path: Path | None, saq_path: Path | None) -> None:
     """Emit an INFO log describing the chosen data source.
 
     Parameters

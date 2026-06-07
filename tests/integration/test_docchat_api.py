@@ -28,9 +28,7 @@ def client(
 
 
 class TestUpload:
-    def test_upload_pdf(
-        self, client: TestClient, sample_plan_pdf_bytes: bytes
-    ) -> None:
+    def test_upload_pdf(self, client: TestClient, sample_plan_pdf_bytes: bytes) -> None:
         response = client.post(
             "/documents",
             files={"file": ("plan.pdf", sample_plan_pdf_bytes, "application/pdf")},
@@ -84,9 +82,7 @@ class TestListAndDelete:
         response = client.delete("/documents/missing")
         assert response.status_code == 404
 
-    def test_list_then_delete(
-        self, client: TestClient, sample_plan_pdf_bytes: bytes
-    ) -> None:
+    def test_list_then_delete(self, client: TestClient, sample_plan_pdf_bytes: bytes) -> None:
         upload = client.post(
             "/documents",
             files={"file": ("plan.pdf", sample_plan_pdf_bytes, "application/pdf")},
@@ -102,9 +98,7 @@ class TestListAndDelete:
 
 
 class TestChat:
-    def test_chat_returns_citations(
-        self, client: TestClient, sample_plan_pdf_bytes: bytes
-    ) -> None:
+    def test_chat_returns_citations(self, client: TestClient, sample_plan_pdf_bytes: bytes) -> None:
         upload = client.post(
             "/documents",
             files={"file": ("plan.pdf", sample_plan_pdf_bytes, "application/pdf")},
@@ -139,7 +133,5 @@ class TestChat:
             files={"file": ("plan.pdf", sample_plan_pdf_bytes, "application/pdf")},
         ).json()
         doc_id = upload["document"]["document_id"]
-        response = client.post(
-            "/chat", json={"document_id": doc_id, "question": ""}
-        )
+        response = client.post("/chat", json={"document_id": doc_id, "question": ""})
         assert response.status_code == 422

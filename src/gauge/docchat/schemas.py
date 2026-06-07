@@ -15,9 +15,7 @@ class Chunk(BaseModel):
     document_id: str
     chunk_index: int
     text: str
-    page_numbers: list[int] = Field(
-        description="1-indexed pages this chunk's text spans."
-    )
+    page_numbers: list[int] = Field(description="1-indexed pages this chunk's text spans.")
 
 
 class DocumentMeta(BaseModel):
@@ -66,6 +64,4 @@ class ChatResponse(BaseModel):
     question: str
     answer: str
     citations: list[Citation]
-    llm_used: str = Field(
-        description="Identifier for the LLM that produced the answer."
-    )
+    llm_used: str = Field(description="Identifier for the LLM that produced the answer.")

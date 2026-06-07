@@ -87,9 +87,7 @@ class DocumentChatService:
         self.store.add(meta, chunks)
         return meta
 
-    def ask(
-        self, document_id: str, question: str, top_k: int = 4
-    ) -> ChatResponse:
+    def ask(self, document_id: str, question: str, top_k: int = 4) -> ChatResponse:
         """Answer a question against a previously uploaded document.
 
         Parameters

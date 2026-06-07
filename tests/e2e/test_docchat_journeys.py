@@ -24,9 +24,7 @@ def client(trained_predictor: CostPredictor) -> TestClient:
     )
 
 
-def test_journey_upload_and_ask(
-    client: TestClient, sample_plan_pdf_bytes: bytes
-) -> None:
+def test_journey_upload_and_ask(client: TestClient, sample_plan_pdf_bytes: bytes) -> None:
     upload = client.post(
         "/documents",
         files={"file": ("plan.pdf", sample_plan_pdf_bytes, "application/pdf")},
@@ -43,12 +41,9 @@ def test_journey_upload_and_ask(
             "/chat",
             json={"document_id": doc_id, "question": question},
         ).json()
-        cited_pages = {
-            p for c in response["citations"] for p in c["page_numbers"]
-        }
+        cited_pages = {p for c in response["citations"] for p in c["page_numbers"]}
         assert expected_page in cited_pages, (
-            f"question {question!r} did not cite page {expected_page}; "
-            f"got pages {cited_pages}"
+            f"question {question!r} did not cite page {expected_page}; got pages {cited_pages}"
         )
 
 
@@ -61,7 +56,5 @@ def test_journey_upload_then_delete_blocks_chat(
     ).json()
     doc_id = upload["document"]["document_id"]
     client.delete(f"/documents/{doc_id}")
-    follow_up = client.post(
-        "/chat", json={"document_id": doc_id, "question": "anything?"}
-    )
+    follow_up = client.post("/chat", json={"document_id": doc_id, "question": "anything?"})
     assert follow_up.status_code == 404

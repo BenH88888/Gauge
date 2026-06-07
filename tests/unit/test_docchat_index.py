@@ -11,9 +11,7 @@ pytestmark = pytest.mark.unit
 
 
 def _chunk(i: int, text: str, pages: list[int]) -> Chunk:
-    return Chunk(
-        document_id="d", chunk_index=i, text=text, page_numbers=pages
-    )
+    return Chunk(document_id="d", chunk_index=i, text=text, page_numbers=pages)
 
 
 def test_index_requires_non_empty_chunks() -> None:

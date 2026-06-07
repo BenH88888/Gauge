@@ -50,9 +50,7 @@ class SqliteSessionStore:
         self._db_path = Path(db_path)
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
-        self._conn = sqlite3.connect(
-            str(self._db_path), check_same_thread=False
-        )
+        self._conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute(self._CREATE_TABLE)
         self._conn.commit()
@@ -72,8 +70,7 @@ class SqliteSessionStore:
         """
         with self._lock:
             self._conn.execute(
-                "INSERT OR REPLACE INTO sessions (session_id, data, created_at)"
-                " VALUES (?, ?, ?)",
+                "INSERT OR REPLACE INTO sessions (session_id, data, created_at) VALUES (?, ?, ?)",
                 (
                     session.session_id,
                     session.model_dump_json(),

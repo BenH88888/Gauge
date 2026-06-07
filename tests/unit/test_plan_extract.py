@@ -167,8 +167,17 @@ class TestPlanExtractorExtract:
 
     def test_partial_extraction(self) -> None:
         """When only some fields are parseable, others remain None."""
-        responses = iter(["$2,000", "I don't know", "15%",
-                          "I don't know", "I don't know", "I don't know", "I don't know"])
+        responses = iter(
+            [
+                "$2,000",
+                "I don't know",
+                "15%",
+                "I don't know",
+                "I don't know",
+                "I don't know",
+                "I don't know",
+            ]
+        )
 
         class _SequentialLLM:
             def answer(self, question: str, chunks: list[Chunk]) -> str:

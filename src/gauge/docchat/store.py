@@ -89,9 +89,7 @@ class InMemoryDocumentStore:
         """
         index = TfidfRetrievalIndex(chunks)
         with self._lock:
-            self._docs[meta.document_id] = StoredDocument(
-                meta=meta, chunks=chunks, index=index
-            )
+            self._docs[meta.document_id] = StoredDocument(meta=meta, chunks=chunks, index=index)
 
     def get(self, document_id: str) -> StoredDocument | None:
         """Return the stored document for ``document_id``, or ``None``.

@@ -164,9 +164,7 @@ def apply_plan_to_annual_spend(plan: Plan, charges_cents: int) -> AnnualPlanShar
     )
 
 
-def oop_interval_from_prediction(
-    plan: Plan, prediction: CostPrediction
-) -> OopInterval:
+def oop_interval_from_prediction(plan: Plan, prediction: CostPrediction) -> OopInterval:
     """Derive the OOP interval from a conformal charge prediction.
 
     Applies the plan's cost-share function monotonically to the lower bound,

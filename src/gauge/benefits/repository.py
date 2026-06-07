@@ -51,9 +51,7 @@ class InMemoryRepository:
         """
         self._plans: dict[str, Plan] = {p.plan_id: p for p in plans}
         self._members: dict[str, Member] = {m.member_id: m for m in members}
-        self._procedures: dict[str, Procedure] = {
-            p.code: p for p in procedures
-        }
+        self._procedures: dict[str, Procedure] = {p.code: p for p in procedures}
 
     def get_plan(self, plan_id: str) -> Plan | None:
         """Return the plan with ``plan_id``, or ``None`` if absent."""

@@ -85,9 +85,7 @@ def generate_synthetic_dataset(
     bmi_effect = np.where(smoker_flag, 1_400.0, 60.0) * bmi_over_30
     noise = rng.lognormal(mean=0.0, sigma=0.15, size=n_rows)
 
-    charges = (
-        base + age_effect + children_effect + smoker_effect + bmi_effect
-    ) * noise
+    charges = (base + age_effect + children_effect + smoker_effect + bmi_effect) * noise
 
     return pd.DataFrame(
         {

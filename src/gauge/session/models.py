@@ -55,9 +55,7 @@ class Session(BaseModel):
     document_id: str | None = None
     plan_draft: PlanDraft | None = None
     plan: Plan | None = None
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 # ---------------------------------------------------------------------------

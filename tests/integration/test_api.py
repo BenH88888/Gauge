@@ -103,9 +103,7 @@ class TestEstimateEndpoint:
         )
         assert response.status_code == 404
 
-    def test_estimate_validation_error_on_missing_fields(
-        self, client: TestClient
-    ) -> None:
+    def test_estimate_validation_error_on_missing_fields(self, client: TestClient) -> None:
         response = client.post("/estimate", json={"member_id": "m1"})
         assert response.status_code == 422
 

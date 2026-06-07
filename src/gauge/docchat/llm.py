@@ -84,10 +84,7 @@ class EchoLLM:
                 "relevant to your question. Try rephrasing it or "
                 "uploading a more specific section of the plan."
             )
-        header = (
-            f"Here is what the document says that seems relevant to "
-            f"\"{question.strip()}\":"
-        )
+        header = f'Here is what the document says that seems relevant to "{question.strip()}":'
         body_lines = []
         for c in contexts:
             pages = ", ".join(str(p) for p in c.page_numbers) or "?"
@@ -129,9 +126,7 @@ class AnthropicLLM:
         try:
             import anthropic  # noqa: F401
         except ImportError as e:
-            raise RuntimeError(
-                "Install the 'anthropic' extra to use AnthropicLLM."
-            ) from e
+            raise RuntimeError("Install the 'anthropic' extra to use AnthropicLLM.") from e
         if not os.environ.get("ANTHROPIC_API_KEY"):
             raise RuntimeError("ANTHROPIC_API_KEY environment variable is not set.")
         from anthropic import Anthropic
@@ -156,10 +151,7 @@ class AnthropicLLM:
             when ``contexts`` is empty.
         """
         if not contexts:
-            return (
-                "I couldn't find anything in this document that looks "
-                "relevant to your question."
-            )
+            return "I couldn't find anything in this document that looks relevant to your question."
         context_block = "\n\n".join(
             f"[Excerpt {i + 1}, page(s) {', '.join(str(p) for p in c.page_numbers)}]\n{c.text}"
             for i, c in enumerate(contexts)
@@ -172,8 +164,7 @@ class AnthropicLLM:
                 {
                     "role": "user",
                     "content": (
-                        f"Question: {question}\n\n"
-                        f"Excerpts from the plan document:\n{context_block}"
+                        f"Question: {question}\n\nExcerpts from the plan document:\n{context_block}"
                     ),
                 }
             ],
@@ -205,9 +196,7 @@ class OpenAILLM:
         try:
             import openai  # noqa: F401
         except ImportError as e:
-            raise RuntimeError(
-                "Install the 'openai' extra to use OpenAILLM."
-            ) from e
+            raise RuntimeError("Install the 'openai' extra to use OpenAILLM.") from e
         if not os.environ.get("OPENAI_API_KEY"):
             raise RuntimeError("OPENAI_API_KEY environment variable is not set.")
         from openai import OpenAI
@@ -232,10 +221,7 @@ class OpenAILLM:
             when ``contexts`` is empty.
         """
         if not contexts:
-            return (
-                "I couldn't find anything in this document that looks "
-                "relevant to your question."
-            )
+            return "I couldn't find anything in this document that looks relevant to your question."
         context_block = "\n\n".join(
             f"[Excerpt {i + 1}, page(s) {', '.join(str(p) for p in c.page_numbers)}]\n{c.text}"
             for i, c in enumerate(contexts)
@@ -248,8 +234,7 @@ class OpenAILLM:
                 {
                     "role": "user",
                     "content": (
-                        f"Question: {question}\n\n"
-                        f"Excerpts from the plan document:\n{context_block}"
+                        f"Question: {question}\n\nExcerpts from the plan document:\n{context_block}"
                     ),
                 },
             ],

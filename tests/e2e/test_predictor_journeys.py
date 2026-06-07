@@ -19,9 +19,7 @@ pytestmark = pytest.mark.e2e
 
 @pytest.fixture
 def client(trained_predictor: CostPredictor) -> TestClient:
-    return TestClient(
-        create_app(build_default_repository(), trained_predictor)
-    )
+    return TestClient(create_app(build_default_repository(), trained_predictor))
 
 
 def _baseline_payload() -> dict:
@@ -38,9 +36,7 @@ def _baseline_payload() -> dict:
 def test_journey_quit_smoking_lowers_predicted_cost(
     client: TestClient,
 ) -> None:
-    smoker = client.post(
-        "/predict", json={"features": _baseline_payload()}
-    ).json()
+    smoker = client.post("/predict", json={"features": _baseline_payload()}).json()
     nonsmoker = client.post(
         "/predict",
         json={"features": _baseline_payload() | {"smoker": "no"}},
@@ -80,9 +76,7 @@ def test_journey_predict_then_apply_plan_has_oop_interval(
     client: TestClient,
 ) -> None:
     """Requesting /predict with a plan_id yields a well-formed OOP interval."""
-    without_plan = client.post(
-        "/predict", json={"features": _baseline_payload()}
-    ).json()
+    without_plan = client.post("/predict", json={"features": _baseline_payload()}).json()
     with_plan = client.post(
         "/predict",
         json={"features": _baseline_payload(), "plan_id": "hdhp_silver"},

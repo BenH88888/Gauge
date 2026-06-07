@@ -57,9 +57,7 @@ def test_smoker_costs_more_than_non_smoker(
     """Directional sanity check; small dataset, so we only test the sign."""
     smoker = baseline_features.model_copy(update={"smoker": "yes"})
     smoker_pred = trained_predictor.predict(smoker).median_charges_cents
-    nonsmoker_pred = trained_predictor.predict(
-        baseline_features
-    ).median_charges_cents
+    nonsmoker_pred = trained_predictor.predict(baseline_features).median_charges_cents
     assert smoker_pred > nonsmoker_pred
 
 
@@ -105,9 +103,7 @@ def test_save_and_load_round_trip(
     restored = CostPredictor.load(cache)
 
     assert restored.is_fitted
-    assert restored.predict(baseline_features) == trained_predictor.predict(
-        baseline_features
-    )
+    assert restored.predict(baseline_features) == trained_predictor.predict(baseline_features)
 
 
 def test_feature_columns_match_schema_fields() -> None:
@@ -202,21 +198,17 @@ def test_conformal_coverage_holds_on_held_out_data() -> None:
 
     df_test = df_all.iloc[test_idx].reset_index(drop=True)
     feature_rows = [
-        PredictionFeatures(**row[ALL_FEATURES].to_dict())
-        for _, row in df_test.iterrows()
+        PredictionFeatures(**row[ALL_FEATURES].to_dict()) for _, row in df_test.iterrows()
     ]
     preds = predictor.predict_many(feature_rows)
     y_true = df_test["charges"].to_numpy() * 100  # dollars -> cents
 
     covered = sum(
-        p.lower_bound_cents <= y <= p.upper_bound_cents
-        for p, y in zip(preds, y_true, strict=True)
+        p.lower_bound_cents <= y <= p.upper_bound_cents for p, y in zip(preds, y_true, strict=True)
     )
     empirical_coverage = covered / len(preds)
     # Allow a small margin below the 80% target given finite test size.
-    assert empirical_coverage >= 0.70, (
-        f"Empirical coverage {empirical_coverage:.2%} is too low"
-    )
+    assert empirical_coverage >= 0.70, f"Empirical coverage {empirical_coverage:.2%} is too low"
 
 
 def test_save_and_load_preserves_calibration(
@@ -232,9 +224,7 @@ def test_save_and_load_preserves_calibration(
     assert restored._q_hat == trained_predictor._q_hat
     assert restored._calibration_coverage == trained_predictor._calibration_coverage
     # Predictions must be identical.
-    assert restored.predict(baseline_features) == trained_predictor.predict(
-        baseline_features
-    )
+    assert restored.predict(baseline_features) == trained_predictor.predict(baseline_features)
 
 
 def test_is_calibrated_false_before_fit() -> None:

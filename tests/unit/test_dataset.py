@@ -70,8 +70,12 @@ def test_load_dataset_with_csv_path_returns_dataframe(tmp_path) -> None:
     # (cardinal directions; the loader remaps them).
     rows = [
         {
-            "age": 30, "sex": "male", "bmi": 25.0,
-            "children": 0, "smoker": "no", "region": "northwest",
+            "age": 30,
+            "sex": "male",
+            "bmi": 25.0,
+            "children": 0,
+            "smoker": "no",
+            "region": "northwest",
             "charges": 4000.0,
         }
     ]

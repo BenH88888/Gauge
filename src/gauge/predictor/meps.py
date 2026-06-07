@@ -123,11 +123,7 @@ def _pick_column(df: pd.DataFrame, role: str) -> str:
             return name
     keywords = ROLE_KEYWORDS.get(role, [])
     hint_columns = sorted(
-        {
-            c
-            for c in df.columns
-            if any(re.search(kw, c, re.IGNORECASE) for kw in keywords)
-        }
+        {c for c in df.columns if any(re.search(kw, c, re.IGNORECASE) for kw in keywords)}
     )
     raise ValueError(
         f"Could not find a MEPS column for role {role!r}. "
@@ -172,27 +168,18 @@ def load_meps(
     try:
         df = pd.read_stata(path, convert_categoricals=False)
     except Exception as e:
-        raise ValueError(
-            f"Could not read MEPS Stata file at {path}: {e}"
-        ) from e
+        raise ValueError(f"Could not read MEPS Stata file at {path}: {e}") from e
 
     if saq_path is not None:
         try:
             saq = pd.read_stata(saq_path, convert_categoricals=False)
         except Exception as e:
-            raise ValueError(
-                f"Could not read MEPS SAQ Stata file at {saq_path}: {e}"
-            ) from e
+            raise ValueError(f"Could not read MEPS SAQ Stata file at {saq_path}: {e}") from e
         if PERSON_ID not in df.columns or PERSON_ID not in saq.columns:
-            raise ValueError(
-                f"Cannot merge SAQ: both files must contain a "
-                f"{PERSON_ID!r} column."
-            )
+            raise ValueError(f"Cannot merge SAQ: both files must contain a {PERSON_ID!r} column.")
         # Only bring across BMI columns (and the person ID). The Panel
         # Longitudinal file has 5k+ columns we don't need.
-        bmi_cols_in_saq = [
-            c for c in COLUMN_CANDIDATES["bmi"] if c in saq.columns
-        ]
+        bmi_cols_in_saq = [c for c in COLUMN_CANDIDATES["bmi"] if c in saq.columns]
         if not bmi_cols_in_saq:
             raise ValueError(
                 f"SAQ file {saq_path} contains no known BMI column. "
@@ -234,14 +221,9 @@ def load_meps(
     # Count children under 18 per family identifier. Done before the
     # adult-only filter so child rows contribute to their family's count.
     kids_per_family = (
-        df.loc[df[col_age].fillna(99) < 18, [col_famid]]
-        .assign(_n=1)
-        .groupby(col_famid)["_n"]
-        .sum()
+        df.loc[df[col_age].fillna(99) < 18, [col_famid]].assign(_n=1).groupby(col_famid)["_n"].sum()
     )
-    df["_children"] = (
-        df[col_famid].map(kids_per_family).fillna(0).astype(int)
-    )
+    df["_children"] = df[col_famid].map(kids_per_family).fillna(0).astype(int)
 
     df = df[df[col_age] >= 18].copy()
 

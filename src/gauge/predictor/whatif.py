@@ -103,8 +103,7 @@ def sweep(
     """
     if feature not in SWEEPABLE_FEATURES:
         raise ValueError(
-            f"Cannot sweep {feature!r}; valid features are "
-            f"{sorted(SWEEPABLE_FEATURES)}."
+            f"Cannot sweep {feature!r}; valid features are {sorted(SWEEPABLE_FEATURES)}."
         )
     if not values:
         return WhatIfResponse(feature=feature, points=[])
@@ -116,13 +115,9 @@ def sweep(
     feature_rows: list[PredictionFeatures] = []
     for v in values:
         try:
-            feature_rows.append(
-                PredictionFeatures.model_validate({**base_payload, feature: v})
-            )
+            feature_rows.append(PredictionFeatures.model_validate({**base_payload, feature: v}))
         except Exception as e:
-            raise ValueError(
-                f"Invalid value {v!r} for feature {feature!r}: {e}"
-            ) from e
+            raise ValueError(f"Invalid value {v!r} for feature {feature!r}: {e}") from e
     predictions = predictor.predict_many(feature_rows)
 
     points: list[WhatIfPoint] = []

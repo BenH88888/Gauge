@@ -59,8 +59,8 @@ N_SEEDS = 10
 SEEDS = list(range(N_SEEDS))
 
 # Colour palette — accessible, consistent across all figures
-C_CQR = "#2563eb"    # blue — CQR / Gauge model
-C_RAW = "#dc2626"    # red  — raw quantile (no conformal)
+C_CQR = "#2563eb"  # blue — CQR / Gauge model
+C_RAW = "#dc2626"  # red  — raw quantile (no conformal)
 C_IDEAL = "#16a34a"  # green — target / perfect calibration
 C_NEUTRAL = "#6b7280"  # grey — baselines
 
@@ -69,7 +69,7 @@ C_NEUTRAL = "#6b7280"  # grey — baselines
 _REFERENCE_PLAN = Plan(
     plan_id="ppo_reference",
     name="Representative PPO",
-    deductible_cents=150_000,        # $1,500
+    deductible_cents=150_000,  # $1,500
     out_of_pocket_max_cents=600_000,  # $6,000
     coinsurance_rate=0.20,
     copays_cents={},
@@ -317,9 +317,7 @@ class QuantileModel:
         hi = np.maximum(0.0, self.q_hi.predict(X) + q)
         return lo, med, hi
 
-    def predict_raw(
-        self, X: pd.DataFrame
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def predict_raw(self, X: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Predict with the un-conformalized (raw) quantile interval.
 
         Parameters
@@ -338,9 +336,7 @@ class QuantileModel:
         return lo, med, hi
 
 
-def _build_pipeline_for_features(
-    quantile: float | None, cols: list[str]
-) -> Pipeline:
+def _build_pipeline_for_features(quantile: float | None, cols: list[str]) -> Pipeline:
     """Build a quantile or mean pipeline whose preprocessor knows only ``cols``.
 
     Parameters
@@ -588,9 +584,7 @@ def evaluate_seed(df: pd.DataFrame, seed: int, store_preds: bool = False) -> See
     for sg in SUBGROUPS:
         mask = _subgroup_mask(df_test, sg)
         if mask.sum() >= 5:
-            result.subgroup_cov[sg] = empirical_coverage(
-                y_test[mask], lo_80[mask], hi_80[mask]
-            )
+            result.subgroup_cov[sg] = empirical_coverage(y_test[mask], lo_80[mask], hi_80[mask])
 
     # §2.3.2 — benchmark
     def _bm(name: str, lo: np.ndarray, y_pt: np.ndarray, hi: np.ndarray) -> None:
@@ -667,10 +661,7 @@ def aggregate(results: list[SeedResult]) -> dict[str, Any]:
         a = np.array(vals)
         return {"mean": float(a.mean()), "std": float(a.std())}
 
-    cqr_cov = {
-        level: ms([r.cqr_coverage[level] for r in results])
-        for level in NOMINAL_LEVELS
-    }
+    cqr_cov = {level: ms([r.cqr_coverage[level] for r in results]) for level in NOMINAL_LEVELS}
     raw_cov = ms([r.raw_coverage for r in results])
     cqr_width = ms([r.cqr_width_80 for r in results])
     raw_width = ms([r.raw_width_80 for r in results])
@@ -684,10 +675,7 @@ def aggregate(results: list[SeedResult]) -> dict[str, Any]:
     model_names = list(results[0].benchmarks.keys())
     metric_names = list(results[0].benchmarks[model_names[0]].keys())
     benchmarks: dict[str, dict[str, dict[str, float]]] = {
-        name: {
-            metric: ms([r.benchmarks[name][metric] for r in results])
-            for metric in metric_names
-        }
+        name: {metric: ms([r.benchmarks[name][metric] for r in results]) for metric in metric_names}
         for name in model_names
     }
 
@@ -740,12 +728,22 @@ def plot_charge_distribution(df: pd.DataFrame, source_label: str) -> None:
         hi_exp = np.log10(charges.max())
         bins = np.logspace(lo_exp, hi_exp, 50)
         ax.hist(charges, bins=bins, color=C_CQR, alpha=0.75, edgecolor="white", linewidth=0.4)
-        ax.axvline(np.mean(charges), color=C_RAW, linewidth=1.8, linestyle="--", label=f"Mean ${np.mean(charges):,.0f}")
-        ax.axvline(np.median(charges), color=C_IDEAL, linewidth=1.8, linestyle="-", label=f"Median ${np.median(charges):,.0f}")
-        ax.set_xscale("log")
-        ax.xaxis.set_major_formatter(
-            plt.FuncFormatter(lambda x, _: f"${x:,.0f}")
+        ax.axvline(
+            np.mean(charges),
+            color=C_RAW,
+            linewidth=1.8,
+            linestyle="--",
+            label=f"Mean ${np.mean(charges):,.0f}",
         )
+        ax.axvline(
+            np.median(charges),
+            color=C_IDEAL,
+            linewidth=1.8,
+            linestyle="-",
+            label=f"Median ${np.median(charges):,.0f}",
+        )
+        ax.set_xscale("log")
+        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.0f}"))
         ax.set_xlabel("Annual charges (USD, log scale)")
         ax.set_ylabel("Count")
         ax.set_title(
@@ -774,19 +772,39 @@ def plot_coverage_calibration(agg: dict[str, Any]) -> None:
 
         # Ideal diagonal
         diag = np.linspace(0.45, 1.0, 100)
-        ax.plot(diag, diag, color=C_IDEAL, linewidth=1.2, linestyle="--", label="Perfect calibration (y = x)", zorder=1)
+        ax.plot(
+            diag,
+            diag,
+            color=C_IDEAL,
+            linewidth=1.2,
+            linestyle="--",
+            label="Perfect calibration (y = x)",
+            zorder=1,
+        )
 
         # CQR line with error bars
         ax.errorbar(
-            levels, cqr_means, yerr=cqr_stds,
-            color=C_CQR, marker="o", markersize=6, linewidth=2,
-            capsize=4, label=f"CQR (Gauge) — mean ± std over {N_SEEDS} seeds",
+            levels,
+            cqr_means,
+            yerr=cqr_stds,
+            color=C_CQR,
+            marker="o",
+            markersize=6,
+            linewidth=2,
+            capsize=4,
+            label=f"CQR (Gauge) — mean ± std over {N_SEEDS} seeds",
             zorder=3,
         )
 
         # Raw quantile — constant horizontal band
-        ax.axhline(raw_mean, color=C_RAW, linewidth=2, linestyle="-",
-                   label=f"Raw quantile (q0.1–q0.9): {raw_mean:.1%} ± {raw_std:.1%}", zorder=2)
+        ax.axhline(
+            raw_mean,
+            color=C_RAW,
+            linewidth=2,
+            linestyle="-",
+            label=f"Raw quantile (q0.1–q0.9): {raw_mean:.1%} ± {raw_std:.1%}",
+            zorder=2,
+        )
         ax.axhspan(raw_mean - raw_std, raw_mean + raw_std, color=C_RAW, alpha=0.12)
 
         ax.set_xlabel("Nominal coverage")
@@ -826,8 +844,15 @@ def plot_conditional_coverage(agg: dict[str, Any]) -> None:
     with plt.rc_context(_RC):
         fig, ax = plt.subplots(figsize=(7, 6))
         y_pos = np.arange(len(labels))
-        ax.barh(y_pos, means, xerr=stds, color=colors, alpha=0.75,
-                error_kw={"capsize": 3, "linewidth": 1.2}, height=0.6)
+        ax.barh(
+            y_pos,
+            means,
+            xerr=stds,
+            color=colors,
+            alpha=0.75,
+            error_kw={"capsize": 3, "linewidth": 1.2},
+            height=0.6,
+        )
         ax.axvline(0.80, color=C_IDEAL, linewidth=1.8, linestyle="--", label="80% target")
         ax.set_yticks(y_pos)
         ax.set_yticklabels(labels, fontsize=10)
@@ -863,13 +888,21 @@ def plot_predicted_vs_actual(seed_result: SeedResult) -> None:
 
         # Points outside interval
         ax.scatter(
-            y[~in_interval], yp[~in_interval],  # type: ignore[index]
-            c=C_RAW, s=18, alpha=0.55, label=f"Outside 80% CI ({(~in_interval).mean():.1%})",
+            y[~in_interval],
+            yp[~in_interval],  # type: ignore[index]
+            c=C_RAW,
+            s=18,
+            alpha=0.55,
+            label=f"Outside 80% CI ({(~in_interval).mean():.1%})",
         )
         # Points inside interval
         ax.scatter(
-            y[in_interval], yp[in_interval],  # type: ignore[index]
-            c=C_CQR, s=12, alpha=0.35, label=f"Inside 80% CI ({in_interval.mean():.1%})",
+            y[in_interval],
+            yp[in_interval],  # type: ignore[index]
+            c=C_CQR,
+            s=12,
+            alpha=0.35,
+            label=f"Inside 80% CI ({in_interval.mean():.1%})",
         )
 
         # Calibration reference
@@ -902,14 +935,15 @@ def plot_benchmark(agg: dict[str, Any]) -> None:
     model_names = list(bm.keys())
     mae_means = np.array([bm[m]["mae"]["mean"] for m in model_names])
     mae_stds = np.array([bm[m]["mae"]["std"] for m in model_names])
-    pb_means = np.array([
-        (bm[m]["pinball_lo"]["mean"] + bm[m]["pinball_hi"]["mean"]) / 2
-        for m in model_names
-    ])
-    pb_stds = np.array([
-        np.sqrt((bm[m]["pinball_lo"]["std"] ** 2 + bm[m]["pinball_hi"]["std"] ** 2) / 2)
-        for m in model_names
-    ])
+    pb_means = np.array(
+        [(bm[m]["pinball_lo"]["mean"] + bm[m]["pinball_hi"]["mean"]) / 2 for m in model_names]
+    )
+    pb_stds = np.array(
+        [
+            np.sqrt((bm[m]["pinball_lo"]["std"] ** 2 + bm[m]["pinball_hi"]["std"] ** 2) / 2)
+            for m in model_names
+        ]
+    )
 
     colors = [C_CQR if "CQR" in n else C_NEUTRAL for n in model_names]
 
@@ -918,7 +952,13 @@ def plot_benchmark(agg: dict[str, Any]) -> None:
 
         for ax, vals, stds, xlabel, title in [
             (axes[0], mae_means, mae_stds, "MAE (USD)", "Mean Absolute Error ↓"),
-            (axes[1], pb_means, pb_stds, "Pinball loss (USD)", "Mean Pinball Loss ↓\n(proper quantile scoring rule)"),
+            (
+                axes[1],
+                pb_means,
+                pb_stds,
+                "Pinball loss (USD)",
+                "Mean Pinball Loss ↓\n(proper quantile scoring rule)",
+            ),
         ]:
             order = np.argsort(vals)[::-1]
             y_pos = np.arange(len(model_names))
@@ -960,16 +1000,30 @@ def plot_architecture() -> None:
     # Box geometry (x_centre, y_centre, width, height, label, sublabel)
     stages: list[tuple[float, float, float, float, str, str]] = [
         (0.08, 0.50, 0.12, 0.36, "Demographics", "age · sex · BMI\nchildren · smoker\nregion"),
-        (0.28, 0.50, 0.12, 0.36, "ML Prediction", "CQR interval\n[lo, median, hi]\ncoverage ≥ 80 %"),
+        (
+            0.28,
+            0.50,
+            0.12,
+            0.36,
+            "ML Prediction",
+            "CQR interval\n[lo, median, hi]\ncoverage ≥ 80 %",
+        ),
         (0.50, 0.50, 0.12, 0.36, "Plan Upload", "PDF → extract\ndeductible · OOP max\ncoinsurance"),
         (0.72, 0.50, 0.12, 0.36, "Apply Plan", "monotone map\nOOP(lo) ≤ OOP(med)\n≤ OOP(hi)"),
-        (0.92, 0.50, 0.12, 0.36, "OOP Interval", "80 % guarantee\ntransfers exactly\nno simulation"),
+        (
+            0.92,
+            0.50,
+            0.12,
+            0.36,
+            "OOP Interval",
+            "80 % guarantee\ntransfers exactly\nno simulation",
+        ),
     ]
 
     # Colours — match the rest of the report palette
-    box_fill = "#dbeafe"    # light blue (matches OOP band in WhatIfChart)
-    box_edge = C_CQR        # blue
-    arrow_col = "#374151"   # near-black
+    box_fill = "#dbeafe"  # light blue (matches OOP band in WhatIfChart)
+    box_edge = C_CQR  # blue
+    arrow_col = "#374151"  # near-black
 
     fig, ax = plt.subplots(figsize=(13, 3.2))
     ax.set_xlim(0, 1)
@@ -978,17 +1032,39 @@ def plot_architecture() -> None:
 
     for x, y, w, h, title, sub in stages:
         rect = plt.Rectangle(
-            (x - w / 2, y - h / 2), w, h,
-            facecolor=box_fill, edgecolor=box_edge, linewidth=1.8,
+            (x - w / 2, y - h / 2),
+            w,
+            h,
+            facecolor=box_fill,
+            edgecolor=box_edge,
+            linewidth=1.8,
             zorder=2,
         )
         ax.add_patch(rect)
         # Title — bold
-        ax.text(x, y + 0.04, title, ha="center", va="center",
-                fontsize=10, fontweight="bold", color="#1e3a5f", zorder=3)
+        ax.text(
+            x,
+            y + 0.04,
+            title,
+            ha="center",
+            va="center",
+            fontsize=10,
+            fontweight="bold",
+            color="#1e3a5f",
+            zorder=3,
+        )
         # Sublabel — smaller, grey
-        ax.text(x, y - 0.09, sub, ha="center", va="center",
-                fontsize=7.5, color="#4b5563", linespacing=1.4, zorder=3)
+        ax.text(
+            x,
+            y - 0.09,
+            sub,
+            ha="center",
+            va="center",
+            fontsize=7.5,
+            color="#4b5563",
+            linespacing=1.4,
+            zorder=3,
+        )
 
     # Arrows between boxes
     for i in range(len(stages) - 1):
@@ -997,7 +1073,8 @@ def plot_architecture() -> None:
         y_mid = 0.50
         ax.annotate(
             "",
-            xy=(x_end, y_mid), xytext=(x_start, y_mid),
+            xy=(x_end, y_mid),
+            xytext=(x_start, y_mid),
             arrowprops=dict(
                 arrowstyle="-|>",
                 color=arrow_col,
@@ -1009,7 +1086,10 @@ def plot_architecture() -> None:
 
     fig.suptitle(
         "Gauge pipeline",
-        fontsize=13, fontweight="bold", y=0.97, color="#111827",
+        fontsize=13,
+        fontweight="bold",
+        y=0.97,
+        color="#111827",
     )
     fig.tight_layout(rect=(0, 0, 1, 0.93))
     _save(fig, "architecture")
@@ -1045,33 +1125,28 @@ def plot_oop_transform(seed_result: SeedResult, source_label: str) -> None:
     assert seed_result.y_pred_lo is not None
     assert seed_result.y_pred_hi is not None
 
-    y = seed_result.y_test       # actual annual charges, dollars
-    lo = seed_result.y_pred_lo   # CQR lower bounds, dollars
-    hi = seed_result.y_pred_hi   # CQR upper bounds, dollars
+    y = seed_result.y_test  # actual annual charges, dollars
+    lo = seed_result.y_pred_lo  # CQR lower bounds, dollars
+    hi = seed_result.y_pred_hi  # CQR upper bounds, dollars
 
     plan = _REFERENCE_PLAN
-    ded = plan.deductible_cents / 100             # $1,500
+    ded = plan.deductible_cents / 100  # $1,500
     oop_max = plan.out_of_pocket_max_cents / 100  # $6,000
-    coin = plan.coinsurance_rate                  # 0.20
+    coin = plan.coinsurance_rate  # 0.20
     # Analytic charge level at which the OOP max is first reached:
     #   ded + coin * (cap_charge - ded) = oop_max  →  cap_charge = ded + (oop_max - ded) / coin
-    cap_charge = ded + (oop_max - ded) / coin     # $24,000
+    cap_charge = ded + (oop_max - ded) / coin  # $24,000
 
     # Apply the plan to every actual test-set charge to get the OOP distribution.
-    oop_y = np.array([
-        apply_plan_to_annual_spend(plan, max(0, int(c * 100))).member_pays_cents / 100
-        for c in y
-    ])
+    oop_y = np.array(
+        [apply_plan_to_annual_spend(plan, max(0, int(c * 100))).member_pays_cents / 100 for c in y]
+    )
 
     # Representative 80% interval: median of the per-user CQR bounds.
     lo_rep = float(np.median(lo))
     hi_rep = float(np.median(hi))
-    oop_lo_rep = apply_plan_to_annual_spend(
-        plan, max(0, int(lo_rep * 100))
-    ).member_pays_cents / 100
-    oop_hi_rep = apply_plan_to_annual_spend(
-        plan, max(0, int(hi_rep * 100))
-    ).member_pays_cents / 100
+    oop_lo_rep = apply_plan_to_annual_spend(plan, max(0, int(lo_rep * 100))).member_pays_cents / 100
+    oop_hi_rep = apply_plan_to_annual_spend(plan, max(0, int(hi_rep * 100))).member_pays_cents / 100
 
     charge_width = hi_rep - lo_rep
     oop_width = oop_hi_rep - oop_lo_rep
@@ -1083,42 +1158,60 @@ def plot_oop_transform(seed_result: SeedResult, source_label: str) -> None:
         lo_exp = np.log10(max(float(y.min()), 1.0))
         hi_exp = np.log10(float(y.max()))
         bins_c = np.logspace(lo_exp, hi_exp, 50)
-        ax_c.hist(y, bins=bins_c, color=C_CQR, alpha=0.65,
-                  edgecolor="white", linewidth=0.3)
+        ax_c.hist(y, bins=bins_c, color=C_CQR, alpha=0.65, edgecolor="white", linewidth=0.3)
         ax_c.axvspan(
-            lo_rep, hi_rep, color=C_CQR, alpha=0.18,
+            lo_rep,
+            hi_rep,
+            color=C_CQR,
+            alpha=0.18,
             label=f"80% CI: \\${lo_rep:,.0f}–\\${hi_rep:,.0f} (median user)",
         )
-        ax_c.axvline(ded, color="#d97706", linewidth=1.8, linestyle="--",
-                     label=f"Deductible: \\${ded:,.0f}")
-        ax_c.axvline(cap_charge, color=C_IDEAL, linewidth=1.8, linestyle=":",
-                     label=f"OOP max reached: >\\${cap_charge:,.0f}")
+        ax_c.axvline(
+            ded, color="#d97706", linewidth=1.8, linestyle="--", label=f"Deductible: \\${ded:,.0f}"
+        )
+        ax_c.axvline(
+            cap_charge,
+            color=C_IDEAL,
+            linewidth=1.8,
+            linestyle=":",
+            label=f"OOP max reached: >\\${cap_charge:,.0f}",
+        )
         ax_c.set_xscale("log")
         ax_c.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"\\${x:,.0f}"))
         ax_c.set_xlabel("Annual gross charges (USD, log scale)")
         ax_c.set_ylabel("Count")
-        ax_c.set_title(
-            f"Annual Gross Charges\n"
-            f"Right-skewed; 80% CI spans \\${charge_width:,.0f}."
-        )
+        ax_c.set_title(f"Annual Gross Charges\nRight-skewed; 80% CI spans \\${charge_width:,.0f}.")
         ax_c.legend(fontsize=9, loc="upper left")
 
         # ── Right: OOP (linear x-scale) ──────────────────────────────────────
-        ax_o.hist(oop_y, bins=60, color="#059669", alpha=0.65,
-                  edgecolor="white", linewidth=0.3)
+        ax_o.hist(oop_y, bins=60, color="#059669", alpha=0.65, edgecolor="white", linewidth=0.3)
         ax_o.axvspan(
-            oop_lo_rep, oop_hi_rep, color="#059669", alpha=0.25,
+            oop_lo_rep,
+            oop_hi_rep,
+            color="#059669",
+            alpha=0.25,
             label=f"80% OOP CI: \\${oop_lo_rep:,.0f}–\\${oop_hi_rep:,.0f}",
         )
-        ax_o.axvline(ded, color="#d97706", linewidth=1.8, linestyle="--",
-                     label=f"Deductible: \\${ded:,.0f}")
-        ax_o.axvline(oop_max, color=C_IDEAL, linewidth=2.0, linestyle="-",
-                     label=f"OOP max (ceiling): \\${oop_max:,.0f}")
+        ax_o.axvline(
+            ded, color="#d97706", linewidth=1.8, linestyle="--", label=f"Deductible: \\${ded:,.0f}"
+        )
+        ax_o.axvline(
+            oop_max,
+            color=C_IDEAL,
+            linewidth=2.0,
+            linestyle="-",
+            label=f"OOP max (ceiling): \\${oop_max:,.0f}",
+        )
         # Label the ceiling using the x-axis transform (data-x · axes-fraction-y).
         ax_o.text(
-            oop_max, 0.92, "← ceiling",
+            oop_max,
+            0.92,
+            "← ceiling",
             transform=ax_o.get_xaxis_transform(),
-            fontsize=9, color=C_IDEAL, va="top", ha="right",
+            fontsize=9,
+            color=C_IDEAL,
+            va="top",
+            ha="right",
         )
         ax_o.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"\\${x:,.0f}"))
         ax_o.set_xlabel("Out-of-pocket cost (USD)")
@@ -1269,24 +1362,24 @@ splits). Error bars on figures represent this seed-to-seed variability.
 ### 3.1 Coverage calibration
 
 The headline result: the raw quantile interval achieves only
-**{raw_cov_80['mean']:.1%} ± {raw_cov_80['std']:.1%} empirical coverage** when
+**{raw_cov_80["mean"]:.1%} ± {raw_cov_80["std"]:.1%} empirical coverage** when
 targeting 80%. CQR closes this gap to
-**{cqr_cov_80['mean']:.1%} ± {cqr_cov_80['std']:.1%}** — honoring the
+**{cqr_cov_80["mean"]:.1%} ± {cqr_cov_80["std"]:.1%}** — honoring the
 guarantee across coverage targets:
 
 | Nominal level | CQR empirical | Raw q0.1–q0.9 |
 |:---:|:---:|:---:|
-| 50% | {agg['cqr_coverage']['0.5']['mean']:.1%} ± {agg['cqr_coverage']['0.5']['std']:.1%} | {raw_cov_80['mean']:.1%} (fixed) |
-| **80%** | **{cqr_cov_80['mean']:.1%} ± {cqr_cov_80['std']:.1%}** | **{raw_cov_80['mean']:.1%} ± {raw_cov_80['std']:.1%}** |
-| 90% | {cqr_cov_90['mean']:.1%} ± {cqr_cov_90['std']:.1%} | {raw_cov_80['mean']:.1%} (fixed) |
-| 95% | {agg['cqr_coverage']['0.95']['mean']:.1%} ± {agg['cqr_coverage']['0.95']['std']:.1%} | {raw_cov_80['mean']:.1%} (fixed) |
+| 50% | {agg["cqr_coverage"]["0.5"]["mean"]:.1%} ± {agg["cqr_coverage"]["0.5"]["std"]:.1%} | {raw_cov_80["mean"]:.1%} (fixed) |
+| **80%** | **{cqr_cov_80["mean"]:.1%} ± {cqr_cov_80["std"]:.1%}** | **{raw_cov_80["mean"]:.1%} ± {raw_cov_80["std"]:.1%}** |
+| 90% | {cqr_cov_90["mean"]:.1%} ± {cqr_cov_90["std"]:.1%} | {raw_cov_80["mean"]:.1%} (fixed) |
+| 95% | {agg["cqr_coverage"]["0.95"]["mean"]:.1%} ± {agg["cqr_coverage"]["0.95"]["std"]:.1%} | {raw_cov_80["mean"]:.1%} (fixed) |
 
 ![Coverage calibration](reports/figures/coverage_calibration.png)
 
 **Interval efficiency.** Coverage alone can be gamed by making the interval
 arbitrarily wide. CQR mean width at 80%:
-**${agg['cqr_width_80']['mean']:,.0f} ± ${agg['cqr_width_80']['std']:,.0f}** vs
-raw interval **${agg['raw_width_80']['mean']:,.0f} ± ${agg['raw_width_80']['std']:,.0f}**.
+**${agg["cqr_width_80"]["mean"]:,.0f} ± ${agg["cqr_width_80"]["std"]:,.0f}** vs
+raw interval **${agg["raw_width_80"]["mean"]:,.0f} ± ${agg["raw_width_80"]["std"]:,.0f}**.
 CQR widens the interval just enough to hit the target — it cannot shrink below
 the raw width.
 
@@ -1315,11 +1408,11 @@ this metric.
 
 | Model | MAE (USD) | RMSE (USD) | Pinball loss (USD) | Coverage @ 80% |
 |-------|----------:|----------:|------------------:|:--------------:|
-| Global mean | {gm['mae']['mean']:,.0f} ± {gm['mae']['std']:,.0f} | {gm['rmse']['mean']:,.0f} ± {gm['rmse']['std']:,.0f} | {(gm['pinball_lo']['mean']+gm['pinball_hi']['mean'])/2:,.0f} | {gm['coverage_80']['mean']:.1%} |
-| Linear regression | {lm['mae']['mean']:,.0f} ± {lm['mae']['std']:,.0f} | {lm['rmse']['mean']:,.0f} ± {lm['rmse']['std']:,.0f} | {(lm['pinball_lo']['mean']+lm['pinball_hi']['mean'])/2:,.0f} | {lm['coverage_80']['mean']:.1%} |
-| GBM + Gaussian | {gbm_g['mae']['mean']:,.0f} ± {gbm_g['mae']['std']:,.0f} | {gbm_g['rmse']['mean']:,.0f} ± {gbm_g['rmse']['std']:,.0f} | {(gbm_g['pinball_lo']['mean']+gbm_g['pinball_hi']['mean'])/2:,.0f} | {gbm_g['coverage_80']['mean']:.1%} |
-| Raw quantile | {raw['mae']['mean']:,.0f} ± {raw['mae']['std']:,.0f} | {raw['rmse']['mean']:,.0f} ± {raw['rmse']['std']:,.0f} | {(raw['pinball_lo']['mean']+raw['pinball_hi']['mean'])/2:,.0f} | {raw['coverage_80']['mean']:.1%} |
-| **CQR (Gauge)** | **{cqr['mae']['mean']:,.0f} ± {cqr['mae']['std']:,.0f}** | **{cqr['rmse']['mean']:,.0f} ± {cqr['rmse']['std']:,.0f}** | **{(cqr['pinball_lo']['mean']+cqr['pinball_hi']['mean'])/2:,.0f}** | **{cqr['coverage_80']['mean']:.1%}** |
+| Global mean | {gm["mae"]["mean"]:,.0f} ± {gm["mae"]["std"]:,.0f} | {gm["rmse"]["mean"]:,.0f} ± {gm["rmse"]["std"]:,.0f} | {(gm["pinball_lo"]["mean"] + gm["pinball_hi"]["mean"]) / 2:,.0f} | {gm["coverage_80"]["mean"]:.1%} |
+| Linear regression | {lm["mae"]["mean"]:,.0f} ± {lm["mae"]["std"]:,.0f} | {lm["rmse"]["mean"]:,.0f} ± {lm["rmse"]["std"]:,.0f} | {(lm["pinball_lo"]["mean"] + lm["pinball_hi"]["mean"]) / 2:,.0f} | {lm["coverage_80"]["mean"]:.1%} |
+| GBM + Gaussian | {gbm_g["mae"]["mean"]:,.0f} ± {gbm_g["mae"]["std"]:,.0f} | {gbm_g["rmse"]["mean"]:,.0f} ± {gbm_g["rmse"]["std"]:,.0f} | {(gbm_g["pinball_lo"]["mean"] + gbm_g["pinball_hi"]["mean"]) / 2:,.0f} | {gbm_g["coverage_80"]["mean"]:.1%} |
+| Raw quantile | {raw["mae"]["mean"]:,.0f} ± {raw["mae"]["std"]:,.0f} | {raw["rmse"]["mean"]:,.0f} ± {raw["rmse"]["std"]:,.0f} | {(raw["pinball_lo"]["mean"] + raw["pinball_hi"]["mean"]) / 2:,.0f} | {raw["coverage_80"]["mean"]:.1%} |
+| **CQR (Gauge)** | **{cqr["mae"]["mean"]:,.0f} ± {cqr["mae"]["std"]:,.0f}** | **{cqr["rmse"]["mean"]:,.0f} ± {cqr["rmse"]["std"]:,.0f}** | **{(cqr["pinball_lo"]["mean"] + cqr["pinball_hi"]["mean"]) / 2:,.0f}** | **{cqr["coverage_80"]["mean"]:.1%}** |
 
 ![Model benchmark](reports/figures/benchmark.png)
 
@@ -1330,8 +1423,8 @@ interval width at 80%:
 
 | Ablation | ΔMAE | ΔWidth |
 |----------|-----:|-------:|
-| Drop BMI | +${abl['Drop BMI']['mae_delta']['mean']:,.0f} | +${abl['Drop BMI']['width_delta']['mean']:,.0f} |
-| Drop smoker | +${abl['Drop smoker']['mae_delta']['mean']:,.0f} | +${abl['Drop smoker']['width_delta']['mean']:,.0f} |
+| Drop BMI | +${abl["Drop BMI"]["mae_delta"]["mean"]:,.0f} | +${abl["Drop BMI"]["width_delta"]["mean"]:,.0f} |
+| Drop smoker | +${abl["Drop smoker"]["mae_delta"]["mean"]:,.0f} | +${abl["Drop smoker"]["width_delta"]["mean"]:,.0f} |
 
 Smoker status is the dominant signal: removing it substantially widens the
 interval because the model loses the ability to separate the low-cost and
@@ -1422,8 +1515,10 @@ def main() -> None:
     print("Loading data…")
     df, source_label = resolve_data()
     print(f"  {source_label}")
-    print(f"  charges: mean=${df[TARGET].mean():,.0f}  median=${df[TARGET].median():,.0f}  "
-          f"max=${df[TARGET].max():,.0f}")
+    print(
+        f"  charges: mean=${df[TARGET].mean():,.0f}  median=${df[TARGET].median():,.0f}  "
+        f"max=${df[TARGET].max():,.0f}"
+    )
 
     print(f"\nRunning evaluation across {N_SEEDS} seeds…")
     results: list[SeedResult] = []
@@ -1440,9 +1535,7 @@ def main() -> None:
     agg = aggregate(results)
 
     print("Saving benchmark.json…")
-    (REPORTS_DIR / "benchmark.json").write_text(
-        json.dumps(agg, indent=2), encoding="utf-8"
-    )
+    (REPORTS_DIR / "benchmark.json").write_text(json.dumps(agg, indent=2), encoding="utf-8")
 
     print("Generating figures…")
     plot_architecture()

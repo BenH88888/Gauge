@@ -17,9 +17,7 @@ from gauge.predictor.schemas import PredictionFeatures
 
 pytestmark = pytest.mark.unit
 
-_REAL_CSV = (
-    Path(__file__).resolve().parents[2] / "data" / "insurance.csv"
-)
+_REAL_CSV = Path(__file__).resolve().parents[2] / "data" / "insurance.csv"
 _HAS_REAL = _REAL_CSV.exists()
 _skip_no_real = pytest.mark.skipif(
     not _HAS_REAL,

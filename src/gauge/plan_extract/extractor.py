@@ -46,12 +46,10 @@ _FIELD_QUESTIONS: dict[str, str] = {
         "Reply with the dollar amount only, for example '$30'."
     ),
     "copay_specialist": (
-        "What is the specialist visit copay? "
-        "Reply with the dollar amount only, for example '$50'."
+        "What is the specialist visit copay? Reply with the dollar amount only, for example '$50'."
     ),
     "copay_urgent_care": (
-        "What is the urgent care copay? "
-        "Reply with the dollar amount only, for example '$75'."
+        "What is the urgent care copay? Reply with the dollar amount only, for example '$75'."
     ),
     "copay_generic_drug": (
         "What is the copay for a generic prescription drug? "
@@ -173,9 +171,7 @@ class PlanExtractor:
             if not extraction.confident:
                 unresolved.append(field)
                 clip = extraction.raw[:_NOTE_RAW_CLIP]
-                notes.append(
-                    f"Could not parse {field!r} -- document said: {clip!r}"
-                )
+                notes.append(f"Could not parse {field!r} -- document said: {clip!r}")
 
         draft.unresolved_fields = unresolved
         draft.extraction_notes = notes

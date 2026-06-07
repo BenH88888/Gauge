@@ -69,10 +69,7 @@ def test_components_sum_to_charges(hdhp_silver: Plan) -> None:
 def test_apply_plan_monotone(ppo_gold: Plan) -> None:
     """OOP is non-decreasing in charges — the monotonicity property underpinning OopInterval."""
     charge_values = [0, 50_000, 100_000, 200_000, 500_000, 1_000_000, 5_000_000]
-    oop_values = [
-        apply_plan_to_annual_spend(ppo_gold, c).member_pays_cents
-        for c in charge_values
-    ]
+    oop_values = [apply_plan_to_annual_spend(ppo_gold, c).member_pays_cents for c in charge_values]
     for a, b in itertools.pairwise(oop_values):
         assert b >= a
 

@@ -202,9 +202,7 @@ def _build_pipeline(regressor) -> Pipeline:
         ],
         remainder="passthrough",
     )
-    return Pipeline(
-        steps=[("preprocessor", preprocessor), ("regressor", regressor)]
-    )
+    return Pipeline(steps=[("preprocessor", preprocessor), ("regressor", regressor)])
 
 
 class CostPredictor:
@@ -240,8 +238,7 @@ class CostPredictor:
         lower, point, upper = quantiles
         if not (0.0 < lower < point < upper < 1.0):
             raise ValueError(
-                "quantiles must be three increasing values in (0, 1); "
-                f"got {quantiles}"
+                f"quantiles must be three increasing values in (0, 1); got {quantiles}"
             )
         self.quantiles = quantiles
         self._trained: _TrainedPipelines | None = None
@@ -322,13 +319,9 @@ class CostPredictor:
         if missing:
             raise ValueError(f"Training data missing columns: {sorted(missing)}")
         if not (0.0 < calibration_frac < 1.0):
-            raise ValueError(
-                f"calibration_frac must be in (0, 1); got {calibration_frac}"
-            )
+            raise ValueError(f"calibration_frac must be in (0, 1); got {calibration_frac}")
         if not (0.0 < calibration_coverage < 1.0):
-            raise ValueError(
-                f"calibration_coverage must be in (0, 1); got {calibration_coverage}"
-            )
+            raise ValueError(f"calibration_coverage must be in (0, 1); got {calibration_coverage}")
 
         # --- train / calibration split ---
         rng = np.random.default_rng(seed)
@@ -391,9 +384,7 @@ class CostPredictor:
             If called before the regressors have been fitted.
         """
         if self._trained is None:
-            raise RuntimeError(
-                "_run_calibration called before regressors were fitted."
-            )
+            raise RuntimeError("_run_calibration called before regressors were fitted.")
         X_cal = df_cal[ALL_FEATURES]
         y_cal = df_cal[target_column].to_numpy()
 
@@ -463,9 +454,7 @@ class CostPredictor:
             calibration_coverage=self._calibration_coverage,
         )
 
-    def predict_many(
-        self, feature_rows: list[PredictionFeatures]
-    ) -> list[CostPrediction]:
+    def predict_many(self, feature_rows: list[PredictionFeatures]) -> list[CostPrediction]:
         """Batch-predict charges for multiple feature vectors.
 
         Runs all four pipelines once per batch rather than once per row,

@@ -81,9 +81,7 @@ class SqliteDocumentStore:
         self._db_path = Path(db_path)
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
-        self._conn = sqlite3.connect(
-            str(self._db_path), check_same_thread=False
-        )
+        self._conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA foreign_keys=ON")
         self._conn.execute(_CREATE_DOCUMENTS)
@@ -141,9 +139,7 @@ class SqliteDocumentStore:
                 ],
             )
             self._conn.commit()
-            self._docs[meta.document_id] = StoredDocument(
-                meta=meta, chunks=chunks, index=index
-            )
+            self._docs[meta.document_id] = StoredDocument(meta=meta, chunks=chunks, index=index)
 
     def get(self, document_id: str) -> StoredDocument | None:
         """Return the stored document for ``document_id``, or ``None``.
@@ -229,8 +225,7 @@ class SqliteDocumentStore:
         None
         """
         rows = self._conn.execute(
-            "SELECT document_id, filename, n_pages, n_chunks, uploaded_at"
-            " FROM documents"
+            "SELECT document_id, filename, n_pages, n_chunks, uploaded_at FROM documents"
         ).fetchall()
 
         restored = 0
@@ -279,6 +274,4 @@ class SqliteDocumentStore:
             restored += 1
 
         if restored:
-            logger.info(
-                "Restored %d document(s) from %s", restored, self._db_path
-            )
+            logger.info("Restored %d document(s) from %s", restored, self._db_path)

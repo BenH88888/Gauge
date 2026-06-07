@@ -18,9 +18,7 @@ pytestmark = pytest.mark.e2e
 
 @pytest.fixture
 def client(trained_predictor: CostPredictor) -> TestClient:
-    return TestClient(
-        create_app(build_default_repository(), trained_predictor)
-    )
+    return TestClient(create_app(build_default_repository(), trained_predictor))
 
 
 def test_journey_compare_in_network_vs_out_of_network(
@@ -48,10 +46,7 @@ def test_journey_compare_in_network_vs_out_of_network(
         },
     ).json()
 
-    assert (
-        out_of_network["member_pays_cents"]
-        > in_network["member_pays_cents"]
-    )
+    assert out_of_network["member_pays_cents"] > in_network["member_pays_cents"]
     assert any("Out-of-network" in n for n in out_of_network["notes"])
 
 
@@ -59,9 +54,7 @@ def test_journey_close_to_oop_max(client: TestClient) -> None:
     """A user near the OOP cap sees the cap respected on a big claim."""
     member = client.get("/members/m3").json()
     plan = client.get(f"/plans/{member['plan_id']}").json()
-    remaining_oop = (
-        plan["out_of_pocket_max_cents"] - member["ytd_out_of_pocket_cents"]
-    )
+    remaining_oop = plan["out_of_pocket_max_cents"] - member["ytd_out_of_pocket_cents"]
 
     estimate = client.post(
         "/estimate",

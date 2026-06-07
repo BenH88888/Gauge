@@ -158,10 +158,7 @@ class TestInMemorySessionStoreConcurrency:
             except Exception as e:
                 errors.append(e)
 
-        threads = [
-            threading.Thread(target=mutate, args=(f"s{i}", f"doc-{i}"))
-            for i in range(20)
-        ]
+        threads = [threading.Thread(target=mutate, args=(f"s{i}", f"doc-{i}")) for i in range(20)]
         for t in threads:
             t.start()
         for t in threads:
@@ -213,8 +210,12 @@ class TestCreateSessionRequest:
         with pytest.raises(ValidationError):
             CreateSessionRequest(
                 features=PredictionFeatures(
-                    age=-1, sex="male", bmi=25.0,
-                    children=0, smoker="no", region="south",
+                    age=-1,
+                    sex="male",
+                    bmi=25.0,
+                    children=0,
+                    smoker="no",
+                    region="south",
                 )
             )
 

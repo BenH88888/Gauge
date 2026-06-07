@@ -61,9 +61,7 @@ class TfidfRetrievalIndex:
             If ``chunks`` is empty.
         """
         if not chunks:
-            raise ValueError(
-                "TfidfRetrievalIndex requires at least one chunk."
-            )
+            raise ValueError("TfidfRetrievalIndex requires at least one chunk.")
         self._chunks = list(chunks)
         texts = [c.text for c in self._chunks]
         try:
@@ -111,8 +109,4 @@ class TfidfRetrievalIndex:
         sims = cosine_similarity(query_vec, self._matrix).ravel()
         # Pick the top-k by score; argsort returns ascending so we slice from end.
         top = sims.argsort()[::-1][: max(1, k)]
-        return [
-            (self._chunks[int(i)], float(sims[int(i)]))
-            for i in top
-            if sims[int(i)] > 0.0
-        ]
+        return [(self._chunks[int(i)], float(sims[int(i)])) for i in top if sims[int(i)] > 0.0]

@@ -146,9 +146,7 @@ def create_app(
         If ``predictor`` has not been fitted yet.
     """
     if not predictor.is_fitted:
-        raise ValueError(
-            "CostPredictor must be fitted before being passed to create_app."
-        )
+        raise ValueError("CostPredictor must be fitted before being passed to create_app.")
 
     chat_service = chat_service or DocumentChatService()
     session_store = session_store or InMemorySessionStore()
@@ -166,9 +164,7 @@ def create_app(
         "GAUGE_CORS_ORIGINS",
         "http://localhost:5173,http://127.0.0.1:5173",
     )
-    allowed_origins = [
-        o.strip() for o in raw_origins.split(",") if o.strip()
-    ]
+    allowed_origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins,
@@ -226,9 +222,7 @@ def create_app(
             )
         return member
 
-    @app.get(
-        "/procedures/{code}", response_model=Procedure, tags=["catalog"]
-    )
+    @app.get("/procedures/{code}", response_model=Procedure, tags=["catalog"])
     def get_procedure(
         code: str,
         repo: CatalogRepository = Depends(get_repository),
@@ -262,10 +256,7 @@ def create_app(
         if plan is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=(
-                    f"Plan '{member.plan_id}' for member "
-                    f"'{member.member_id}' not found."
-                ),
+                detail=(f"Plan '{member.plan_id}' for member '{member.member_id}' not found."),
             )
         procedure = repo.get_procedure(request.procedure_code)
         if procedure is None:
@@ -323,9 +314,7 @@ def create_app(
                 plan=plan,
             )
         except ValueError as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-            ) from e
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
     # --- document chat routes ------------------------------------------
 
@@ -365,9 +354,7 @@ def create_app(
                 pdf_bytes=contents,
             )
         except ValueError as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-            ) from e
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
         return UploadResponse(document=meta)
 
     @app.get(
@@ -527,16 +514,10 @@ def create_app(
                 pdf_bytes=contents,
             )
         except ValueError as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-            ) from e
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
         stored_doc = service.store.get(meta.document_id)
-        draft = (
-            extractor.extract(stored_doc.index)
-            if stored_doc is not None
-            else PlanDraft()
-        )
+        draft = extractor.extract(stored_doc.index) if stored_doc is not None else PlanDraft()
 
         session.document_id = meta.document_id
         session.plan_draft = draft
@@ -631,9 +612,7 @@ def create_app(
                 detail=f"Session '{session_id}' not found.",
             )
 
-        copays = {
-            ServiceCategory(k): v for k, v in request.copays_cents.items()
-        }
+        copays = {ServiceCategory(k): v for k, v in request.copays_cents.items()}
         plan = Plan(
             plan_id=uuid.uuid4().hex[:12],
             name=request.plan_name,
@@ -762,9 +741,7 @@ def create_app(
                 plan=session.plan,
             )
         except ValueError as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-            ) from e
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
     @app.post(
         "/sessions/{session_id}/chat",
@@ -826,9 +803,7 @@ def create_app(
     return app
 
 
-def _resolve_plan(
-    plan_id: str | None, repo: CatalogRepository
-) -> Plan | None:
+def _resolve_plan(plan_id: str | None, repo: CatalogRepository) -> Plan | None:
     """Look up a plan by ID, raising HTTP 404 if provided but not found.
 
     Parameters

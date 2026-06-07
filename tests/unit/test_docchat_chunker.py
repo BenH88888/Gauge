@@ -15,9 +15,7 @@ def test_chunker_preserves_text_and_assigns_pages() -> None:
         (2, "B" * 500),
         (3, "C" * 500),
     ]
-    chunks = chunk_pages(
-        pages, document_id="d", chunk_size=400, overlap=50
-    )
+    chunks = chunk_pages(pages, document_id="d", chunk_size=400, overlap=50)
     assert chunks, "expected at least one chunk"
     # Every chunk is at most chunk_size characters.
     for c in chunks:
@@ -31,9 +29,7 @@ def test_chunker_preserves_text_and_assigns_pages() -> None:
 
 def test_chunker_overlap_creates_overlap() -> None:
     pages = [(1, "abcdefghij" * 50)]  # 500 chars on a single page
-    chunks = chunk_pages(
-        pages, document_id="d", chunk_size=200, overlap=50
-    )
+    chunks = chunk_pages(pages, document_id="d", chunk_size=200, overlap=50)
     # With chunk_size=200, overlap=50, step=150, we expect at least three
     # chunks and adjacent ones must share their overlap region.
     assert len(chunks) >= 2

@@ -59,21 +59,15 @@ def estimate_cost_share(
     """
     if member.plan_id != plan.plan_id:
         raise ValueError(
-            f"Member {member.member_id} is on plan {member.plan_id}, "
-            f"not {plan.plan_id}."
+            f"Member {member.member_id} is on plan {member.plan_id}, not {plan.plan_id}."
         )
 
     notes: list[str] = []
 
-    allowed = (
-        procedure.in_network_rate_cents
-        if in_network
-        else procedure.billed_amount_cents
-    )
+    allowed = procedure.in_network_rate_cents if in_network else procedure.billed_amount_cents
     if not in_network:
         notes.append(
-            "Out-of-network: billed amount used as allowed; deductible "
-            "and coinsurance still apply."
+            "Out-of-network: billed amount used as allowed; deductible and coinsurance still apply."
         )
 
     copay = 0
@@ -84,26 +78,20 @@ def estimate_cost_share(
     if has_copay:
         copay = min(plan.copays_cents[procedure.category], allowed)
     else:
-        remaining_deductible = max(
-            0, plan.deductible_cents - member.ytd_deductible_cents
-        )
+        remaining_deductible = max(0, plan.deductible_cents - member.ytd_deductible_cents)
         deductible_applied = min(remaining_deductible, allowed)
         after_deductible = allowed - deductible_applied
         coinsurance = round(after_deductible * plan.coinsurance_rate)
 
     gross_member = copay + deductible_applied + coinsurance
 
-    remaining_oop = max(
-        0, plan.out_of_pocket_max_cents - member.ytd_out_of_pocket_cents
-    )
+    remaining_oop = max(0, plan.out_of_pocket_max_cents - member.ytd_out_of_pocket_cents)
     if gross_member > remaining_oop:
         excess = gross_member - remaining_oop
         coinsurance, excess = _absorb(coinsurance, excess)
         deductible_applied, excess = _absorb(deductible_applied, excess)
         copay, _ = _absorb(copay, excess)
-        notes.append(
-            "Out-of-pocket maximum reached; plan absorbs the remainder."
-        )
+        notes.append("Out-of-pocket maximum reached; plan absorbs the remainder.")
 
     member_pays = copay + deductible_applied + coinsurance
     plan_pays = allowed - member_pays

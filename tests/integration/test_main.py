@@ -55,9 +55,7 @@ class TestDatasetResolution:
         assert kind == m._KIND_MEPS
         assert path == dta
 
-    def test_synthetic_fallback(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_synthetic_fallback(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Falls back to synthetic when no data source is configured."""
         import gauge.main as m
 

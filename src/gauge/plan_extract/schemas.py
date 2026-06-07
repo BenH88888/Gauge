@@ -32,9 +32,7 @@ class FieldExtraction(BaseModel):
     raw: str = Field(description="Raw LLM response before parsing.")
     value: int | float | None = Field(
         default=None,
-        description=(
-            "Parsed numeric value: cents for money fields, fraction for rates."
-        ),
+        description=("Parsed numeric value: cents for money fields, fraction for rates."),
     )
     confident: bool = Field(
         default=False,

@@ -116,11 +116,7 @@ def _pages_for_span(
     """
     pages: set[int] = set()
     for i, (offset, page_number) in enumerate(page_starts):
-        next_offset = (
-            page_starts[i + 1][0]
-            if i + 1 < len(page_starts)
-            else float("inf")
-        )
+        next_offset = page_starts[i + 1][0] if i + 1 < len(page_starts) else float("inf")
         if offset < span_end and next_offset > span_start:
             pages.add(page_number)
     return sorted(pages)

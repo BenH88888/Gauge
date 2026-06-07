@@ -264,9 +264,7 @@ class TestConfirmPlan:
 
     def test_oop_interval_is_monotone(self, client: TestClient) -> None:
         sid = _create_session(client)
-        body = client.post(
-            f"/sessions/{sid}/plan", json=_confirm_plan_payload()
-        ).json()
+        body = client.post(f"/sessions/{sid}/plan", json=_confirm_plan_payload()).json()
         interval = body["oop_interval"]
         assert interval["lower_cents"] <= interval["median_cents"]
         assert interval["median_cents"] <= interval["upper_cents"]
@@ -276,22 +274,16 @@ class TestConfirmPlan:
     ) -> None:
         sid = _create_session(client)
         upload = _upload_pdf(client, sid, sample_plan_pdf_bytes)
-        body = client.post(
-            f"/sessions/{sid}/plan", json=_confirm_plan_payload()
-        ).json()
+        body = client.post(f"/sessions/{sid}/plan", json=_confirm_plan_payload()).json()
         assert body["document_id"] == upload["document_id"]
 
     def test_document_id_null_without_upload(self, client: TestClient) -> None:
         sid = _create_session(client)
-        body = client.post(
-            f"/sessions/{sid}/plan", json=_confirm_plan_payload()
-        ).json()
+        body = client.post(f"/sessions/{sid}/plan", json=_confirm_plan_payload()).json()
         assert body["document_id"] is None
 
     def test_unknown_session_returns_404(self, client: TestClient) -> None:
-        resp = client.post(
-            "/sessions/ghost/plan", json=_confirm_plan_payload()
-        )
+        resp = client.post("/sessions/ghost/plan", json=_confirm_plan_payload())
         assert resp.status_code == 404
 
     def test_negative_deductible_returns_422(self, client: TestClient) -> None:
@@ -310,9 +302,7 @@ class TestConfirmPlan:
         )
         assert resp.status_code == 422
 
-    def test_higher_deductible_increases_member_share(
-        self, client: TestClient
-    ) -> None:
+    def test_higher_deductible_increases_member_share(self, client: TestClient) -> None:
         """A higher deductible should never decrease member out-of-pocket."""
         sid_low = _create_session(client)
         sid_high = _create_session(client)
@@ -324,10 +314,7 @@ class TestConfirmPlan:
             f"/sessions/{sid_high}/plan",
             json=_confirm_plan_payload(deductible_cents=500_000),
         ).json()
-        assert (
-            high["oop_interval"]["median_cents"]
-            >= low["oop_interval"]["median_cents"]
-        )
+        assert high["oop_interval"]["median_cents"] >= low["oop_interval"]["median_cents"]
 
 
 # ---------------------------------------------------------------------------
@@ -344,9 +331,7 @@ class TestGetEstimate:
         assert body["oop_interval"] is None
         assert body["plan"] is None
 
-    def test_after_plan_confirmed_returns_oop_interval(
-        self, client: TestClient
-    ) -> None:
+    def test_after_plan_confirmed_returns_oop_interval(self, client: TestClient) -> None:
         sid = _create_session(client)
         client.post(f"/sessions/{sid}/plan", json=_confirm_plan_payload())
         resp = client.get(f"/sessions/{sid}/estimate")
@@ -449,9 +434,7 @@ class TestSessionChat:
         assert body["answer"]
         assert isinstance(body["citations"], list)
 
-    def test_chat_without_document_returns_404(
-        self, client: TestClient
-    ) -> None:
+    def test_chat_without_document_returns_404(self, client: TestClient) -> None:
         sid = _create_session(client)
         resp = client.post(
             f"/sessions/{sid}/chat",

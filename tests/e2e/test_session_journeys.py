@@ -86,9 +86,7 @@ def _plan_payload(**overrides) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def test_journey_full_guided_flow(
-    client: TestClient, sample_plan_pdf_bytes: bytes
-) -> None:
+def test_journey_full_guided_flow(client: TestClient, sample_plan_pdf_bytes: bytes) -> None:
     """Complete four-step flow: create → upload → confirm → estimate + what-if + chat."""
 
     # Step 1: create session
@@ -190,12 +188,12 @@ def test_journey_skip_pdf_manual_plan_entry(client: TestClient) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_journey_multi_session_isolation(
-    client: TestClient, sample_plan_pdf_bytes: bytes
-) -> None:
+def test_journey_multi_session_isolation(client: TestClient, sample_plan_pdf_bytes: bytes) -> None:
     """Concurrent sessions hold independent state."""
     sid_a = client.post("/sessions", json={"features": _features(smoker="no")}).json()["session_id"]
-    sid_b = client.post("/sessions", json={"features": _features(smoker="yes")}).json()["session_id"]
+    sid_b = client.post("/sessions", json={"features": _features(smoker="yes")}).json()[
+        "session_id"
+    ]
 
     # Confirm only session A.
     client.post(f"/sessions/{sid_a}/plan", json=_plan_payload(plan_name="Plan A"))
@@ -260,12 +258,7 @@ def test_journey_out_of_order_calls_return_useful_errors(
 
     assert client.get(f"/sessions/{fake_id}/estimate").status_code == 404
     assert client.get(f"/sessions/{fake_id}/plan-draft").status_code == 404
-    assert (
-        client.post(
-            f"/sessions/{fake_id}/plan", json=_plan_payload()
-        ).status_code
-        == 404
-    )
+    assert client.post(f"/sessions/{fake_id}/plan", json=_plan_payload()).status_code == 404
     assert (
         client.post(
             f"/sessions/{fake_id}/whatif",
@@ -296,17 +289,16 @@ def test_journey_smoker_prediction_higher_than_non_smoker(
     s_est = client.get(f"/sessions/{s_id}/estimate").json()
 
     assert (
-        s_est["prediction"]["median_charges_cents"]
-        >= ns_est["prediction"]["median_charges_cents"]
+        s_est["prediction"]["median_charges_cents"] >= ns_est["prediction"]["median_charges_cents"]
     )
 
 
 def test_journey_oop_cap_respected_in_estimate(client: TestClient) -> None:
     """Member OOP should never exceed the plan's out-of-pocket maximum."""
     # Force a high predicted spend by using a smoker with high age.
-    sid = client.post(
-        "/sessions", json={"features": _features(smoker="yes", age=60)}
-    ).json()["session_id"]
+    sid = client.post("/sessions", json={"features": _features(smoker="yes", age=60)}).json()[
+        "session_id"
+    ]
 
     oop_max_cents = 300_000
     est = client.post(
