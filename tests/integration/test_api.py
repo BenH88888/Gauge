@@ -11,8 +11,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from gauge.api import create_app
-from gauge.predictor.model import CostPredictor
 from gauge.benefits.repository import InMemoryRepository
+from gauge.predictor.model import CostPredictor
 
 pytestmark = pytest.mark.integration
 

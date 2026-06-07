@@ -30,7 +30,7 @@ _skip_no_real = pytest.mark.skipif(
 @_skip_no_real
 def test_real_csv_has_expected_schema() -> None:
     df = load_csv(_REAL_CSV)
-    assert list(df.columns) == FEATURE_COLUMNS + [TARGET_COLUMN]
+    assert list(df.columns) == [*FEATURE_COLUMNS, TARGET_COLUMN]
     # Categorical values must be inside the schema's literal sets so the
     # OneHotEncoder doesn't pick up surprise categories. Regions get
     # remapped from cardinal (Kaggle) to Census (canonical) at load time.

@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
-
 import numpy as np
+import pytest
 
 from gauge.predictor.dataset import generate_synthetic_dataset
 from gauge.predictor.model import (
@@ -211,7 +210,7 @@ def test_conformal_coverage_holds_on_held_out_data() -> None:
 
     covered = sum(
         p.lower_bound_cents <= y <= p.upper_bound_cents
-        for p, y in zip(preds, y_true)
+        for p, y in zip(preds, y_true, strict=True)
     )
     empirical_coverage = covered / len(preds)
     # Allow a small margin below the 80% target given finite test size.

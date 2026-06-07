@@ -10,8 +10,10 @@ import threading
 from datetime import datetime, timezone
 
 import pytest
+from pydantic import ValidationError
 
 from gauge.plan_extract.schemas import PlanDraft
+from gauge.predictor.model import CostPrediction
 from gauge.predictor.schemas import PredictionFeatures
 from gauge.session.models import (
     ConfirmPlanRequest,
@@ -20,7 +22,6 @@ from gauge.session.models import (
     SessionEstimate,
 )
 from gauge.session.store import InMemorySessionStore
-from gauge.predictor.model import CostPrediction
 
 pytestmark = pytest.mark.unit
 
@@ -127,7 +128,7 @@ class TestInMemorySessionStoreConcurrency:
         def create(s: Session) -> None:
             try:
                 store.create(s)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 errors.append(e)
 
         threads = [threading.Thread(target=create, args=(s,)) for s in sessions]
@@ -154,7 +155,7 @@ class TestInMemorySessionStoreConcurrency:
                 assert s is not None
                 s.document_id = doc_id
                 store.update(s)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 errors.append(e)
 
         threads = [
@@ -209,7 +210,7 @@ class TestCreateSessionRequest:
         assert req.features.age == 35
 
     def test_invalid_age_raises(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             CreateSessionRequest(
                 features=PredictionFeatures(
                     age=-1, sex="male", bmi=25.0,
@@ -242,7 +243,7 @@ class TestConfirmPlanRequest:
         assert req.plan_name == "Acme Bronze"
 
     def test_negative_deductible_rejected(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             ConfirmPlanRequest(
                 deductible_cents=-1,
                 out_of_pocket_max_cents=500_000,
@@ -250,7 +251,7 @@ class TestConfirmPlanRequest:
             )
 
     def test_negative_oop_max_rejected(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             ConfirmPlanRequest(
                 deductible_cents=100_000,
                 out_of_pocket_max_cents=-1,
@@ -258,7 +259,7 @@ class TestConfirmPlanRequest:
             )
 
     def test_coinsurance_above_one_rejected(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             ConfirmPlanRequest(
                 deductible_cents=100_000,
                 out_of_pocket_max_cents=500_000,
@@ -266,7 +267,7 @@ class TestConfirmPlanRequest:
             )
 
     def test_coinsurance_below_zero_rejected(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             ConfirmPlanRequest(
                 deductible_cents=100_000,
                 out_of_pocket_max_cents=500_000,
@@ -311,5 +312,5 @@ class TestSessionEstimate:
             features=_features(),
             prediction=self._prediction(),
         )
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             est.document_id = "mutated"  # type: ignore[misc]

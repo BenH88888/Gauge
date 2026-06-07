@@ -43,7 +43,6 @@ from gauge.predictor.model import (
     ALL_FEATURES,
     CATEGORICAL_FEATURES,
     _build_mean_pipeline,
-    _build_quantile_pipeline,
 )
 
 # ---------------------------------------------------------------------------
@@ -765,8 +764,8 @@ def plot_coverage_calibration(agg: dict[str, Any]) -> None:
     quantile interval under-covers at every target level.
     """
     levels = NOMINAL_LEVELS
-    cqr_means = [agg["cqr_coverage"][str(l)]["mean"] for l in levels]
-    cqr_stds = [agg["cqr_coverage"][str(l)]["std"] for l in levels]
+    cqr_means = [agg["cqr_coverage"][str(lv)]["mean"] for lv in levels]
+    cqr_stds = [agg["cqr_coverage"][str(lv)]["std"] for lv in levels]
     raw_mean = agg["raw_coverage"]["mean"]
     raw_std = agg["raw_coverage"]["std"]
 
@@ -923,7 +922,7 @@ def plot_benchmark(agg: dict[str, Any]) -> None:
         ]:
             order = np.argsort(vals)[::-1]
             y_pos = np.arange(len(model_names))
-            bars = ax.barh(
+            ax.barh(
                 y_pos,
                 vals[order],
                 xerr=stds[order],

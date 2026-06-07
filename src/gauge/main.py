@@ -297,7 +297,7 @@ if _FRONTEND_DIST.exists():
     _INDEX_HTML = _FRONTEND_DIST / "index.html"
 
     @app.get("/{full_path:path}", include_in_schema=False)
-    async def _serve_spa(full_path: str) -> FileResponse:  # noqa: ARG001
+    async def _serve_spa(full_path: str) -> FileResponse:
         """Catch-all route: return index.html for any unknown path.
 
         Parameters

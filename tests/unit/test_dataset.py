@@ -17,7 +17,7 @@ pytestmark = pytest.mark.unit
 def test_dataset_has_expected_columns_and_size() -> None:
     df = generate_synthetic_dataset(n_rows=300, seed=1)
     assert len(df) == 300
-    assert list(df.columns) == FEATURE_COLUMNS + [TARGET_COLUMN]
+    assert list(df.columns) == [*FEATURE_COLUMNS, TARGET_COLUMN]
 
 
 def test_dataset_is_reproducible_with_same_seed() -> None:
@@ -79,5 +79,5 @@ def test_load_dataset_with_csv_path_returns_dataframe(tmp_path) -> None:
     pd.DataFrame(rows).to_csv(csv_path, index=False)
 
     df = load_dataset(csv_path=csv_path)
-    assert list(df.columns) == FEATURE_COLUMNS + [TARGET_COLUMN]
+    assert list(df.columns) == [*FEATURE_COLUMNS, TARGET_COLUMN]
     assert df.iloc[0]["region"] == "midwest"  # northwest -> midwest via KAGGLE_REGION_MAP

@@ -51,7 +51,7 @@ class Plan(BaseModel):
     )
 
     @model_validator(mode="after")
-    def _oop_max_at_least_deductible(self) -> "Plan":
+    def _oop_max_at_least_deductible(self) -> Plan:
         if self.out_of_pocket_max_cents < self.deductible_cents:
             raise ValueError(
                 "out_of_pocket_max_cents must be >= deductible_cents"
@@ -71,7 +71,7 @@ class Member(BaseModel):
     ytd_out_of_pocket_cents: Cents = 0
 
     @model_validator(mode="after")
-    def _deductible_within_oop(self) -> "Member":
+    def _deductible_within_oop(self) -> Member:
         if self.ytd_deductible_cents > self.ytd_out_of_pocket_cents:
             raise ValueError(
                 "ytd_deductible_cents cannot exceed ytd_out_of_pocket_cents; "
@@ -92,7 +92,7 @@ class Procedure(BaseModel):
     billed_amount_cents: Cents
 
     @model_validator(mode="after")
-    def _billed_at_least_negotiated(self) -> "Procedure":
+    def _billed_at_least_negotiated(self) -> Procedure:
         if self.billed_amount_cents < self.in_network_rate_cents:
             raise ValueError(
                 "billed_amount_cents should be >= in_network_rate_cents"

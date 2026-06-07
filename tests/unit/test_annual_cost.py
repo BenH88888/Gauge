@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import itertools
+
 import numpy as np
 import pytest
 
@@ -71,7 +73,7 @@ def test_apply_plan_monotone(ppo_gold: Plan) -> None:
         apply_plan_to_annual_spend(ppo_gold, c).member_pays_cents
         for c in charge_values
     ]
-    for a, b in zip(oop_values, oop_values[1:]):
+    for a, b in itertools.pairwise(oop_values):
         assert b >= a
 
 
@@ -162,7 +164,7 @@ def test_oop_interval_empirical_coverage(ppo_gold: Plan) -> None:
     hi_charges = lo_charges + widths
     true_charges = lo_charges + rng.integers(0, widths + 1, size=500)
 
-    for lo, hi, true in zip(lo_charges, hi_charges, true_charges):
+    for lo, hi, true in zip(lo_charges, hi_charges, true_charges, strict=True):
         oop_lo = apply_plan_to_annual_spend(ppo_gold, int(lo)).member_pays_cents
         oop_hi = apply_plan_to_annual_spend(ppo_gold, int(hi)).member_pays_cents
         oop_true = apply_plan_to_annual_spend(ppo_gold, int(true)).member_pays_cents

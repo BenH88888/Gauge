@@ -14,9 +14,9 @@ from pathlib import Path
 
 import pytest
 
+from gauge.docchat.index import TfidfRetrievalIndex
 from gauge.docchat.schemas import Chunk, DocumentMeta
 from gauge.docchat.sqlite_store import SqliteDocumentStore
-from gauge.docchat.index import TfidfRetrievalIndex
 from gauge.predictor.schemas import PredictionFeatures
 from gauge.session.models import Session
 from gauge.session.sqlite_store import SqliteSessionStore
@@ -185,7 +185,7 @@ class TestSqliteSessionStoreThreadSafety:
         def create(s: Session) -> None:
             try:
                 store.create(s)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 errors.append(e)
 
         threads = [threading.Thread(target=create, args=(s,)) for s in sessions]
@@ -352,7 +352,7 @@ class TestSqliteDocumentStoreThreadSafety:
         def add_doc(i: int) -> None:
             try:
                 store.add(_doc_meta(f"doc-{i}"), _chunks(f"doc-{i}"))
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 errors.append(e)
 
         threads = [threading.Thread(target=add_doc, args=(i,)) for i in range(20)]

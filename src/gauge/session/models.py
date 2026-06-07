@@ -21,7 +21,6 @@ from gauge.predictor.annual_cost import OopInterval
 from gauge.predictor.model import CostPrediction
 from gauge.predictor.schemas import PredictionFeatures
 
-
 # ---------------------------------------------------------------------------
 # Core session state
 # ---------------------------------------------------------------------------

@@ -51,7 +51,7 @@ class TestDatasetResolution:
         monkeypatch.delenv("GAUGE_DATASET_CSV", raising=False)
         monkeypatch.setenv("GAUGE_MEPS_DTA", str(dta))
 
-        kind, tag, path, saq = m._resolve_dataset_source()
+        kind, _, path, _ = m._resolve_dataset_source()
         assert kind == m._KIND_MEPS
         assert path == dta
 
@@ -68,7 +68,7 @@ class TestDatasetResolution:
             patch.object(m, "_LOCAL_MEPS_PATH", tmp_path / "nonexistent.dta"),
             patch.object(m, "_LOCAL_CSV_PATH", tmp_path / "nonexistent.csv"),
         ):
-            kind, tag, path, saq = m._resolve_dataset_source()
+            kind, _, path, _ = m._resolve_dataset_source()
 
         assert kind == m._KIND_SYNTHETIC
         assert path is None

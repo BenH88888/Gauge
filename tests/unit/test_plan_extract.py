@@ -119,7 +119,7 @@ class _FixedAnswerLLM:
     def __init__(self, answer: str) -> None:
         self._answer = answer
 
-    def answer(self, question: str, chunks: list[Chunk]) -> str:  # noqa: ARG002
+    def answer(self, question: str, chunks: list[Chunk]) -> str:
         return self._answer
 
 
@@ -171,7 +171,7 @@ class TestPlanExtractorExtract:
                           "I don't know", "I don't know", "I don't know", "I don't know"])
 
         class _SequentialLLM:
-            def answer(self, question: str, chunks: list[Chunk]) -> str:  # noqa: ARG002
+            def answer(self, question: str, chunks: list[Chunk]) -> str:
                 return next(responses)
 
         index = _make_index(["Some plan text."])

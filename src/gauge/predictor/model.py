@@ -280,7 +280,7 @@ class CostPredictor:
         calibration_frac: float = 0.2,
         calibration_coverage: float = 0.80,
         seed: int = 0,
-    ) -> "CostPredictor":
+    ) -> CostPredictor:
         """Fit four regressors and run CQR calibration on a held-out split.
 
         The data is shuffled and split into a training set
@@ -318,7 +318,7 @@ class CostPredictor:
             ``calibration_frac`` or ``calibration_coverage`` are out of
             range.
         """
-        missing = set(ALL_FEATURES + [target_column]) - set(df.columns)
+        missing = set([*ALL_FEATURES, target_column]) - set(df.columns)
         if missing:
             raise ValueError(f"Training data missing columns: {sorted(missing)}")
         if not (0.0 < calibration_frac < 1.0):
@@ -548,7 +548,7 @@ class CostPredictor:
         )
 
     @classmethod
-    def load(cls, path: Path | str) -> "CostPredictor":
+    def load(cls, path: Path | str) -> CostPredictor:
         """Deserialise a predictor previously saved with :meth:`save`.
 
         Parameters
@@ -603,4 +603,4 @@ def _dollars_to_cents(amount: float) -> int:
     int
         Equivalent amount in cents, never negative.
     """
-    return max(0, int(round(amount * 100)))
+    return max(0, round(amount * 100))

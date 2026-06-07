@@ -257,4 +257,4 @@ def load_meps(
     df["charges"] = df[col_totexp].astype(float).clip(lower=0)
 
     df = df.dropna(subset=["sex", "region", "smoker"]).copy()
-    return df[FEATURE_COLUMNS + [TARGET_COLUMN]].reset_index(drop=True)
+    return df[[*FEATURE_COLUMNS, TARGET_COLUMN]].reset_index(drop=True)

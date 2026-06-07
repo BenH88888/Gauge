@@ -93,7 +93,7 @@ def _parse_dollars(text: str) -> int | None:
     cleaned = text.replace(",", "")
     match = re.search(r"\$?\s*(\d+(?:\.\d{1,2})?)", cleaned)
     if match:
-        return int(round(float(match.group(1)) * 100))
+        return round(float(match.group(1)) * 100)
     return None
 
 

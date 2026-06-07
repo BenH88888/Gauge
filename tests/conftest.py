@@ -21,7 +21,6 @@ from gauge.predictor.dataset import generate_synthetic_dataset
 from gauge.predictor.model import CostPredictor
 from gauge.predictor.schemas import PredictionFeatures
 
-
 # --- benefits fixtures ---------------------------------------------------
 
 

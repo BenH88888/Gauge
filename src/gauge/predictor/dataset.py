@@ -118,7 +118,7 @@ def load_csv(path: Path | str) -> pd.DataFrame:
     Returns
     -------
     pd.DataFrame
-        DataFrame with columns ``FEATURE_COLUMNS + [TARGET_COLUMN]``,
+        DataFrame with columns ``[*FEATURE_COLUMNS, TARGET_COLUMN]``,
         with regions normalised to Census nomenclature.
 
     Raises
@@ -127,10 +127,10 @@ def load_csv(path: Path | str) -> pd.DataFrame:
         If any expected column is missing from the file.
     """
     df = pd.read_csv(path)
-    missing = set(FEATURE_COLUMNS + [TARGET_COLUMN]) - set(df.columns)
+    missing = set([*FEATURE_COLUMNS, TARGET_COLUMN]) - set(df.columns)
     if missing:
         raise ValueError(f"CSV is missing expected columns: {sorted(missing)}")
-    df = df[FEATURE_COLUMNS + [TARGET_COLUMN]].copy()
+    df = df[[*FEATURE_COLUMNS, TARGET_COLUMN]].copy()
     df["region"] = df["region"].map(KAGGLE_REGION_MAP).fillna(df["region"])
     return df
 
@@ -156,7 +156,7 @@ def load_dataset(
     Returns
     -------
     pd.DataFrame
-        Training DataFrame with columns ``FEATURE_COLUMNS + [TARGET_COLUMN]``.
+        Training DataFrame with columns ``[*FEATURE_COLUMNS, TARGET_COLUMN]``.
     """
     if csv_path is not None:
         return load_csv(csv_path)

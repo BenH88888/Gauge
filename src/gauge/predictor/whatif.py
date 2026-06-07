@@ -11,8 +11,6 @@ roughly the same time as a single point.
 
 from __future__ import annotations
 
-from typing import Union
-
 from pydantic import BaseModel, ConfigDict
 
 from gauge.benefits.models import Plan
@@ -20,7 +18,7 @@ from gauge.predictor.annual_cost import OopInterval, oop_interval_from_predictio
 from gauge.predictor.model import CostPrediction, CostPredictor
 from gauge.predictor.schemas import PredictionFeatures
 
-SweepValue = Union[int, float, str]
+SweepValue = int | float | str
 SWEEPABLE_FEATURES: frozenset[str] = frozenset(PredictionFeatures.model_fields)
 
 
@@ -128,7 +126,7 @@ def sweep(
     predictions = predictor.predict_many(feature_rows)
 
     points: list[WhatIfPoint] = []
-    for value, prediction in zip(values, predictions):
+    for value, prediction in zip(values, predictions, strict=True):
         interval = oop_interval_from_prediction(plan, prediction) if plan is not None else None
         points.append(WhatIfPoint(value=value, prediction=prediction, oop_interval=interval))
 
