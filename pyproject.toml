@@ -28,6 +28,7 @@ dev = [
     "reportlab>=4.0",
     "ruff>=0.4",
     "mypy>=1.10",
+    "matplotlib>=3.8",
 ]
 anthropic = ["anthropic>=0.30"]
 openai = ["openai>=1.30"]

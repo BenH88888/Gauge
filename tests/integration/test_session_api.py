@@ -260,16 +260,16 @@ class TestConfirmPlan:
         assert "prediction" in body
         assert "plan" in body
         assert body["plan"]["name"] == "Test Plan"
-        assert body["annual_plan_share_median"] is not None
-        assert body["annual_plan_share_mean"] is not None
+        assert body["oop_interval"] is not None
 
-    def test_cost_share_adds_up(self, client: TestClient) -> None:
+    def test_oop_interval_is_monotone(self, client: TestClient) -> None:
         sid = _create_session(client)
         body = client.post(
             f"/sessions/{sid}/plan", json=_confirm_plan_payload()
         ).json()
-        share = body["annual_plan_share_median"]
-        assert share["member_pays_cents"] + share["plan_pays_cents"] == share["charges_cents"]
+        interval = body["oop_interval"]
+        assert interval["lower_cents"] <= interval["median_cents"]
+        assert interval["median_cents"] <= interval["upper_cents"]
 
     def test_document_id_included_when_doc_uploaded(
         self, client: TestClient, sample_plan_pdf_bytes: bytes
@@ -325,8 +325,8 @@ class TestConfirmPlan:
             json=_confirm_plan_payload(deductible_cents=500_000),
         ).json()
         assert (
-            high["annual_plan_share_median"]["member_pays_cents"]
-            >= low["annual_plan_share_median"]["member_pays_cents"]
+            high["oop_interval"]["median_cents"]
+            >= low["oop_interval"]["median_cents"]
         )
 
 
@@ -336,16 +336,15 @@ class TestConfirmPlan:
 
 
 class TestGetEstimate:
-    def test_before_plan_returns_null_shares(self, client: TestClient) -> None:
+    def test_before_plan_oop_interval_is_null(self, client: TestClient) -> None:
         sid = _create_session(client)
         resp = client.get(f"/sessions/{sid}/estimate")
         assert resp.status_code == 200
         body = resp.json()
-        assert body["annual_plan_share_median"] is None
-        assert body["annual_plan_share_mean"] is None
+        assert body["oop_interval"] is None
         assert body["plan"] is None
 
-    def test_after_plan_confirmed_returns_full_estimate(
+    def test_after_plan_confirmed_returns_oop_interval(
         self, client: TestClient
     ) -> None:
         sid = _create_session(client)
@@ -353,7 +352,7 @@ class TestGetEstimate:
         resp = client.get(f"/sessions/{sid}/estimate")
         assert resp.status_code == 200
         body = resp.json()
-        assert body["annual_plan_share_median"] is not None
+        assert body["oop_interval"] is not None
         assert body["plan"]["name"] == "Test Plan"
 
     def test_unknown_session_returns_404(self, client: TestClient) -> None:

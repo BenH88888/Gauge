@@ -1,156 +1,51 @@
-# Health App
+# Gauge
 
-Prototype that combines four pieces into a single guided flow:
+> **What will my health insurance actually cost me this year?**
 
-1. **Benefits engine** that, given a member and a procedure, applies a
-   plan's deductible, coinsurance, copays, and OOP max to estimate the
-   member's out-of-pocket cost.
-2. **Machine-learning cost predictor** that takes a person's profile
-   (age, sex, BMI, children, smoker status, region) and predicts annual
-   medical charges with an 80% prediction interval. A what-if simulator
-   sweeps any feature and shows how the prediction moves. Predictions
-   can be piped through a plan to produce annual out-of-pocket
-   estimates.
-3. **Insurance document chatbot** that ingests a plan PDF, builds a
-   retrieval index, and answers questions in plain English with
-   page-level citations back to the source document.
-4. **Guided session flow** that ties everything together: a user enters
-   their demographics, uploads their plan PDF, reviews auto-extracted
-   plan fields, and receives a personalised cost estimate with full
-   cost-share breakdown and inline Q&A.
+That one question is surprisingly hard to answer. Your premium is visible. Everything else — deductibles, coinsurance, copays, OOP max, and how all of those interact with your health profile — is not. Gauge makes it answerable: you enter your demographics and your plan, and Gauge returns a calibrated out-of-pocket interval with an honest 80% coverage guarantee, not a single guess dressed up as precision.
+
+<!-- Demo: replace this comment with a Loom thumbnail link + GIF once recorded -->
+
+## The signature result
+
+A wide, right-skewed charge distribution is compressed by the plan into a much tighter out-of-pocket interval. The OOP max eliminates worst-case spend entirely. This is the figure that unifies the ML half and the deterministic benefits half:
+
+![OOP transform](reports/figures/oop_transform.png)
+
+## How it works
+
+![Architecture](reports/figures/architecture.png)
+
+```
+Demographics → ML prediction → Plan upload → Apply plan → OOP interval
+```
+
+**Demographics.** Age, sex, BMI, children, smoker status, and region.
+
+**ML prediction.** Four gradient-boosted models (HistGradientBoostingRegressor) predict the 10th, 50th, and 90th percentile annual charges, plus the mean. The interval is calibrated with Conformalized Quantile Regression (Romano, Patterson & Candès 2019), which guarantees marginal coverage ≥ 80% for any data distribution without assuming normality. The `CostPrediction` response always carries `conformal_calibrated: true` and `calibration_coverage: 0.8`.
+
+**Plan upload.** Upload your Summary of Benefits PDF. The backend extracts deductible, OOP max, coinsurance rate, and copays automatically using targeted Q&A against the document's TF-IDF retrieval index. You review and correct any field before confirming.
+
+**OOP interval.** `apply_plan_to_annual_spend` is monotone non-decreasing in charges, so applying it to the CQR charge interval `[lo, median, hi]` yields a valid OOP interval `[OOP(lo), OOP(median), OOP(hi)]` — no simulation required. The same 80% coverage guarantee transfers.
 
 ## Disclaimer
 
-Estimates produced by this prototype are illustrative only. Real
-benefits and real costs depend on actual plan documents, claim
-adjudication, provider contracts, and personal health history. Members
-should confirm coverage and costs with their insurer.
-
-## ML pipeline overview
-
-* **Model:** four scikit-learn `HistGradientBoostingRegressor`s trained
-  in parallel: three with `loss="quantile"` at the 10th, 50th, and 90th
-  percentiles, plus one with `loss="squared_error"` for the mean. The
-  median is the "typical year" point estimate; the mean is the long-run
-  average (pulled up by the heavy tail). Both are surfaced in every
-  prediction response. Healthcare cost distributions are heavily
-  right-skewed, so showing both is more honest than either alone.
-* **Prediction intervals:** after fitting, the predictor runs
-  Conformal Quantile Regression (CQR) calibration on a held-out 20%
-  split of the training data. CQR computes a nonconformity score per
-  calibration row — how far the true value falls outside the raw
-  10th/90th quantile interval — and finds the finite-sample corrected
-  quantile `q_hat` at level `ceil((n+1)*0.80)/n`. At prediction time,
-  the raw interval is expanded symmetrically by `q_hat`, yielding an
-  interval with a **marginal coverage guarantee of ≥ 80 %** for any data
-  distribution, without assuming normality. Every `CostPrediction`
-  response includes `conformal_calibrated: true` and
-  `calibration_coverage: 0.8` when this guarantee holds.
-* **Features:** age, sex, bmi, children, smoker, region. Categorical
-  features are one-hot encoded via a `ColumnTransformer`; numerics pass
-  through.
-* **Data:** auto-detects in this order:
-  1. `HEALTH_APP_DATASET_CSV` env var, if set — path to a Kaggle-style CSV.
-  2. `HEALTH_APP_MEPS_DTA` env var, if set — path to a MEPS `.dta` file
-     (optionally paired with `HEALTH_APP_MEPS_SAQ` for BMI).
-  3. `data/meps_hc233.dta` if present (run `python scripts/fetch_meps.py`
-     to download). BMI is merged from `data/meps_hc236.dta` (the SAQ
-     supplement) when that file is also present.
-  4. `data/insurance.csv` (Kaggle insurance dataset).
-  5. Synthetic Kaggle-insurance-shaped dataset, deterministically generated.
-
-  Region labels are Census-standard (northeast, midwest, south, west) to
-  match MEPS. The Kaggle CSV's cardinal-direction regions are mapped
-  onto Census regions at load time.
-* **What-if simulator:** holds a baseline feature vector fixed, varies
-  one feature across a list of values, and predicts the curve in a
-  single batched call. Optionally annotates each point with annual
-  cost-share under a chosen plan.
-* **Bridge to benefits engine:** `apply_plan_to_annual_spend` runs the
-  predicted annual charges through the plan's deductible, coinsurance,
-  and OOP max to estimate annual out-of-pocket.
-
-## Document chatbot pipeline
-
-* **PDF extraction** via pypdf, page by page.
-* **Chunking:** sliding-window with overlap, each chunk records the
-  pages it spans so citations point back to the right page.
-* **Retrieval:** TF-IDF + cosine similarity (scikit-learn). One index
-  per uploaded document, which keeps vocabulary tight and tuned to
-  domain-specific language.
-* **LLM:** pluggable. `EchoLLM` is the default (no API key required;
-  returns retrieved excerpts formatted as a coherent answer). Install
-  the `anthropic` or `openai` extra and set the matching environment
-  variable to upgrade to a real LLM:
-
-  ```bash
-  pip install -e ".[anthropic]"
-  export ANTHROPIC_API_KEY=...
-  # or
-  pip install -e ".[openai]"
-  export OPENAI_API_KEY=...
-  ```
-
-  The backend auto-detects whichever is available and reports
-  `llm_used` on every chat response.
-
-## Plan extraction pipeline
-
-When a plan PDF is uploaded in the guided flow the backend automatically
-extracts plan fields without any manual input:
-
-* **Targeted Q&A:** for each field (deductible, OOP max, coinsurance
-  rate, and four copay types) a plain-English question is run against
-  the document's retrieval index.
-* **Regex parsing:** dollar amounts (`_parse_dollars`) and percentages
-  (`_parse_percent`) are extracted from the LLM answer. Anything that
-  cannot be parsed produces a `null` field and is flagged in
-  `unresolved_fields`.
-* **Human confirmation:** the extracted draft is shown to the user on a
-  review form. Fields that were found are pre-filled; missing fields are
-  highlighted with an amber badge so the user can fill them in manually
-  before confirming.
-* **Plan creation:** on confirmation the draft is converted to a `Plan`
-  object and stored in the session, enabling the full annual cost-share
-  breakdown.
-
-## Session layer
-
-The session API (`/sessions/...`) is a thin UUID-keyed store that ties
-`PredictionFeatures`, a `Plan`, and a `document_id` together for the
-duration of a guided flow. Sessions and uploaded documents are persisted
-to a SQLite database at `~/.cache/health_app/health_app.db` by default,
-so they survive a server restart. Override the path with
-`HEALTH_APP_DB_PATH`. Set `HEALTH_APP_NO_PERSIST=1` to use in-memory
-stores instead (useful for testing or ephemeral deployments).
-
-Guided-flow endpoints:
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/sessions` | Create session from demographics; returns initial prediction |
-| `POST` | `/sessions/{id}/document` | Upload plan PDF; returns auto-extracted plan draft |
-| `GET` | `/sessions/{id}/plan-draft` | Fetch the current extracted draft |
-| `POST` | `/sessions/{id}/plan` | Confirm (or correct) plan fields; returns full estimate |
-| `GET` | `/sessions/{id}/estimate` | Fetch the current personalised estimate |
-| `POST` | `/sessions/{id}/whatif` | What-if sweep using the session's demographics as baseline |
-| `POST` | `/sessions/{id}/chat` | Plain-English Q&A against the session's plan document |
+Estimates are illustrative. Real costs depend on actual plan documents, claim adjudication, provider contracts, and personal health history. Confirm coverage and costs with your insurer.
 
 ## Running the app
 
-You need two terminals: one for the Python API, one for the React frontend.
+You need two terminals.
 
-**Terminal 1: backend**
+**Terminal 1 — backend:**
 
 ```bash
 pip install -e ".[dev]"
-uvicorn health_app.main:app --reload
+uvicorn gauge.main:app --reload
 ```
 
-On first startup the predictor trains and caches the model under
-`~/.cache/health_app/`. Subsequent starts load from the cache.
+On first startup the predictor trains and caches the model under `~/.cache/gauge/`. Subsequent starts load from cache.
 
-**Terminal 2: frontend**
+**Terminal 2 — frontend:**
 
 ```bash
 cd frontend
@@ -158,43 +53,26 @@ npm install
 npm run dev
 ```
 
-Then open `http://localhost:5173` in your browser. The default landing
-page is the guided "Get my estimate" flow: enter demographics, upload
-your plan PDF, review extracted fields, and get a personalised estimate.
-The "Cost predictor" and "Document chat" tabs remain available for
-direct access to each module independently.
+Open `http://localhost:5173`. The default view is the guided flow: enter demographics, upload your plan PDF, review extracted fields, and get your personalised OOP interval. The "Explore costs" and "Ask your plan" tabs give direct access to the predictor and document chat modules.
 
-The frontend talks to the backend at `http://localhost:8000` by default.
-Override at build time with the `VITE_API_BASE` env var if you deploy
-the backend elsewhere.
+The frontend talks to the backend at `http://localhost:8000`. Override with `VITE_API_BASE` at build time.
 
-For a production build of the frontend:
+### API examples
 
 ```bash
-cd frontend
-npm run build
-# Output is in frontend/dist; serve it with any static file host.
-```
-
-### Example calls
-
-```bash
-# Predict annual charges and annual OOP under a plan
-# The prediction object always includes conformal_calibrated and
-# calibration_coverage (e.g. {"conformal_calibrated": true,
-# "calibration_coverage": 0.8}) confirming the 80% coverage guarantee.
-curl -X POST http://127.0.0.1:8000/predict \
+# Predict charges + OOP interval under a plan
+curl -X POST http://localhost:8000/predict \
   -H "Content-Type: application/json" \
   -d '{
     "features": {
       "age": 40, "sex": "male", "bmi": 32.0,
-      "children": 2, "smoker": "yes", "region": "southeast"
+      "children": 2, "smoker": "yes", "region": "south"
     },
     "plan_id": "ppo_gold"
   }'
 
-# What-if: sweep age from 25 to 64 under PPO Gold
-curl -X POST http://127.0.0.1:8000/whatif \
+# What-if: sweep age from 25 to 64 and track OOP under PPO Gold
+curl -X POST http://localhost:8000/whatif \
   -H "Content-Type: application/json" \
   -d '{
     "baseline": {
@@ -206,43 +84,65 @@ curl -X POST http://127.0.0.1:8000/whatif \
     "plan_id": "ppo_gold"
   }'
 
-# Per-procedure estimate (benefits engine)
-curl -X POST http://127.0.0.1:8000/estimate \
+# Guided session flow
+SESSION=$(curl -sX POST http://localhost:8000/sessions \
   -H "Content-Type: application/json" \
-  -d '{"member_id":"m1","procedure_code":"99213","in_network":true}'
+  -d '{"features": {"age": 35, "sex": "female", "bmi": 26.5,
+                    "children": 1, "smoker": "no", "region": "northeast"}}' \
+  | jq -r .session_id)
 
-# --- Guided session flow ---
-
-# 1. Create a session (returns session_id + initial prediction)
-curl -X POST http://127.0.0.1:8000/sessions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "features": {
-      "age": 35, "sex": "female", "bmi": 26.5,
-      "children": 1, "smoker": "no", "region": "northeast"
-    }
-  }'
-
-# 2. Upload a plan PDF and extract fields
-curl -X POST http://127.0.0.1:8000/sessions/{session_id}/document \
+curl -X POST http://localhost:8000/sessions/$SESSION/document \
   -F "file=@/path/to/my_plan.pdf"
 
-# 3. Confirm (or correct) the extracted plan fields
-curl -X POST http://127.0.0.1:8000/sessions/{session_id}/plan \
+curl -X POST http://localhost:8000/sessions/$SESSION/plan \
   -H "Content-Type: application/json" \
-  -d '{
-    "deductible_cents": 150000,
-    "out_of_pocket_max_cents": 600000,
-    "coinsurance_rate": 0.20,
-    "copays_cents": {},
-    "plan_name": "My PPO"
-  }'
+  -d '{"deductible_cents": 150000, "out_of_pocket_max_cents": 600000,
+       "coinsurance_rate": 0.20, "copays_cents": {}, "plan_name": "My PPO"}'
 
-# 4. Ask a question about the plan document
-curl -X POST http://127.0.0.1:8000/sessions/{session_id}/chat \
+curl -X POST http://localhost:8000/sessions/$SESSION/chat \
   -H "Content-Type: application/json" \
   -d '{"question": "Is telehealth covered?"}'
 ```
+
+## Data
+
+The predictor auto-detects a data source in this order:
+
+1. `GAUGE_DATASET_CSV` — path to a Kaggle-style insurance CSV.
+2. `GAUGE_MEPS_DTA` — path to a MEPS `.dta` file (optionally paired with `GAUGE_MEPS_SAQ` for BMI from HC-236).
+3. `data/meps_hc233.dta` if present (run `python scripts/fetch_meps.py` to download; BMI merged from `data/meps_hc236.dta` when present).
+4. `data/insurance.csv` (Kaggle insurance dataset).
+5. Synthetic Kaggle-shaped data, deterministically generated.
+
+Region labels are Census-standard (northeast, midwest, south, west) to match MEPS. Kaggle cardinal-direction regions are mapped at load time.
+
+Enabling real LLM backends:
+
+```bash
+pip install -e ".[anthropic]"
+export ANTHROPIC_API_KEY=...
+# or
+pip install -e ".[openai]"
+export OPENAI_API_KEY=...
+```
+
+The backend auto-detects whichever key is set and reports `llm_used` on every chat response. `EchoLLM` (the default) requires no API key and returns retrieved excerpts formatted as answers.
+
+## Session persistence
+
+Sessions and uploaded documents persist to SQLite at `~/.cache/gauge/gauge.db` by default, so they survive a server restart. Override the path with `GAUGE_DB_PATH`. Set `GAUGE_NO_PERSIST=1` to use in-memory stores (useful for testing or ephemeral deployments).
+
+## Guided-flow API endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/sessions` | Create session; returns initial prediction |
+| `POST` | `/sessions/{id}/document` | Upload plan PDF; returns extracted draft |
+| `GET` | `/sessions/{id}/plan-draft` | Fetch current extracted draft |
+| `POST` | `/sessions/{id}/plan` | Confirm plan fields; returns full OOP interval |
+| `GET` | `/sessions/{id}/estimate` | Fetch current personalised estimate |
+| `POST` | `/sessions/{id}/whatif` | What-if sweep on session demographics |
+| `POST` | `/sessions/{id}/chat` | Plain-English Q&A against the session's plan document |
 
 ## Running the tests
 
@@ -250,28 +150,37 @@ curl -X POST http://127.0.0.1:8000/sessions/{session_id}/chat \
 pytest                 # full suite
 pytest -m unit         # fast logic checks
 pytest -m integration  # API endpoint checks
-pytest -m e2e          # multi-step journeys
+pytest -m e2e          # multi-step user journeys
 ```
 
-The full suite is around 2 seconds (70 tests). The predictor is fit
-once per session via a session-scoped fixture so the ML training cost
-is paid exactly once.
+The suite runs in roughly 2 seconds (290+ tests). The predictor is fit once per session via a session-scoped fixture.
+
+## ML evaluation
+
+Run the evaluation script to reproduce the figures in `MODELING.md`:
+
+```bash
+python -m gauge.eval
+```
+
+Outputs figures to `reports/figures/` and `reports/benchmark.json`.
+Key results (10-seed mean): CQR coverage @80% = 80.3%, raw quantile coverage = 77.8%, MAE = $9,335.
 
 ## Project layout
 
 ```
-src/health_app/
+src/gauge/
   benefits/
-    models.py        Pydantic domain models (Plan, Member, Procedure, ...)
+    models.py        Plan, Member, Procedure domain models
     calculator.py    Per-procedure cost-share math
     repository.py    CatalogRepository protocol + in-memory implementation
     seed.py          Sample plans, members, procedures
   predictor/
-    schemas.py       PredictionFeatures (request schema)
-    dataset.py       Synthetic data generator + CSV loader
-    model.py         CostPredictor (3-quantile gradient boosting)
-    whatif.py        What-if sweep with validation
-    annual_cost.py   Predicted charges -> annual member/plan share
+    schemas.py       PredictionFeatures request schema
+    dataset.py       Data loader (MEPS, Kaggle, synthetic)
+    model.py         CostPredictor: 3-quantile + mean gradient boosting + CQR
+    whatif.py        What-if sweep (returns OOP interval per point)
+    annual_cost.py   OopInterval, oop_interval_from_prediction (monotonicity proof)
   docchat/
     schemas.py       Chunk, DocumentMeta, Citation, ChatRequest/Response
     extractor.py     PDF text extraction (pypdf)
@@ -279,40 +188,32 @@ src/health_app/
     index.py         TfidfRetrievalIndex (sklearn TF-IDF + cosine)
     llm.py           EchoLLM + pluggable Anthropic/OpenAI clients
     store.py         InMemoryDocumentStore (thread-safe)
-    sqlite_store.py  SqliteDocumentStore (default; survives restarts)
+    sqlite_store.py  SqliteDocumentStore (survives restarts)
     service.py       Upload + ask orchestration
   plan_extract/
-    schemas.py       PlanDraft + FieldExtraction Pydantic models
+    schemas.py       PlanDraft + FieldExtraction models
     extractor.py     PlanExtractor: targeted Q&A + regex parsing
   session/
     models.py        Session, SessionEstimate, request/response schemas
     store.py         InMemorySessionStore (thread-safe, UUID-keyed)
-    sqlite_store.py  SqliteSessionStore (default; survives restarts)
-  api.py             Unified FastAPI app factory with CORS; includes
-                     all session endpoints (/sessions/...)
-  main.py            Module entry point with model load-or-train
+    sqlite_store.py  SqliteSessionStore (survives restarts)
+  api.py             FastAPI app factory; all endpoints including session flow
+  main.py            Entry point: model load-or-train, app startup
+  eval.py            Evaluation script: coverage, MAE, ablations, figures
 frontend/
   src/
-    App.tsx          Top-level tabs: Get my estimate / Cost predictor /
-                     Document chat
-    api.ts           Typed client for the FastAPI backend (includes
-                     session API functions)
+    App.tsx          Top-level tabs + Gauge branding
+    api.ts           Typed client for the backend (session + predictor + chat)
     components/
-      IntakeWizard.tsx  4-step guided flow (demographics, PDF upload,
-                        plan confirmation, personalised estimate)
-      PredictorPage/    Standalone cost predictor with what-if chart
-      DocChatPage/      Standalone PDF upload + chat panel
+      IntakeWizard.tsx  4-step guided flow → OOP interval hero
+      PredictorPage/    Standalone predictor + what-if chart with OOP band
+      DocChatPage/      PDF upload + chat panel
 tests/
-  unit/              Logic tests (models, calculator, dataset,
-                     predictor, whatif, annual_cost)
-  integration/       Endpoint tests via TestClient
+  unit/              Logic tests: models, calculator, predictor, OOP interval
+  integration/       Endpoint tests via FastAPI TestClient
   e2e/               Multi-step user journey tests
+reports/
+  figures/           PNG + SVG figures from gauge.eval
+  benchmark.json     Numeric eval results
+MODELING.md          ML methodology, calibration results, feature analysis
 ```
-
-## What's next
-
-* Real LLM backend: install the `anthropic` or `openai` extra and set
-  the matching API key to replace `EchoLLM`. Plan extraction quality
-  improves significantly with a real model.
-* Multi-plan comparison in the guided flow so users can compare OOP
-  estimates side by side across two or more uploaded plans.

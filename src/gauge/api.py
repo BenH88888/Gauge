@@ -35,10 +35,7 @@ from gauge.docchat.schemas import (
 from gauge.docchat.service import DocumentChatService
 from gauge.plan_extract.extractor import PlanExtractor
 from gauge.plan_extract.schemas import PlanDraft
-from gauge.predictor.annual_cost import (
-    AnnualPlanShare,
-    apply_plan_to_annual_spend,
-)
+from gauge.predictor.annual_cost import OopInterval, oop_interval_from_prediction
 from gauge.predictor.model import CostPrediction, CostPredictor
 from gauge.predictor.schemas import PredictionFeatures
 from gauge.predictor.whatif import (
@@ -75,7 +72,7 @@ class SessionWhatIfRequest(BaseModel):
 class SessionChatRequest(BaseModel):
     """POST /sessions/{id}/chat body.
 
-    A slimmer alternative to ``ChatRequest`` -- the session already knows
+    A slimmer alternative to ``ChatRequest`` — the session already knows
     its ``document_id``, so the client does not need to supply it.
     """
 
@@ -84,11 +81,19 @@ class SessionChatRequest(BaseModel):
 
 
 class PredictResponse(BaseModel):
-    """POST /predict response."""
+    """POST /predict response.
+
+    Parameters
+    ----------
+    prediction : CostPrediction
+        Raw ML prediction: median, mean, and 80 % conformal charge interval.
+    oop_interval : OopInterval or None
+        Conformal OOP interval derived by propagating ``prediction`` through
+        the requested plan. ``None`` when no ``plan_id`` was supplied.
+    """
 
     prediction: CostPrediction
-    annual_plan_share_median: AnnualPlanShare | None = None
-    annual_plan_share_mean: AnnualPlanShare | None = None
+    oop_interval: OopInterval | None = None
 
 
 class WhatIfRequest(BaseModel):
@@ -150,9 +155,9 @@ def create_app(
     plan_extractor = plan_extractor or PlanExtractor(llm=chat_service.llm)
 
     app = FastAPI(
-        title="Health App",
+        title="Gauge",
         version="0.2.0",
-        description="Benefits engine plus ML cost predictor (prototype).",
+        description="Calibrated out-of-pocket cost estimation with honest uncertainty bounds.",
     )
 
     # CORS for the React dev server. Default allows the standard Vite
@@ -287,16 +292,10 @@ def create_app(
         model: CostPredictor = Depends(get_predictor),
         repo: CatalogRepository = Depends(get_repository),
     ) -> PredictResponse:
-        """Predict annual medical charges; optionally annotate with plan OOP."""
+        """Predict annual medical charges; optionally annotate with plan OOP interval."""
         prediction = model.predict(request.features)
-        share_median, share_mean = _annual_shares_for(
-            request.plan_id, prediction, repo
-        )
-        return PredictResponse(
-            prediction=prediction,
-            annual_plan_share_median=share_median,
-            annual_plan_share_mean=share_mean,
-        )
+        interval = _oop_interval_for(request.plan_id, prediction, repo)
+        return PredictResponse(prediction=prediction, oop_interval=interval)
 
     @app.post(
         "/whatif",
@@ -647,18 +646,11 @@ def create_app(
         store.update(session)
 
         prediction = model.predict(session.features)
-        share_median = apply_plan_to_annual_spend(
-            plan, prediction.median_charges_cents
-        )
-        share_mean = apply_plan_to_annual_spend(
-            plan, prediction.mean_charges_cents
-        )
         return SessionEstimate(
             features=session.features,
             prediction=prediction,
             plan=plan,
-            annual_plan_share_median=share_median,
-            annual_plan_share_mean=share_mean,
+            oop_interval=oop_interval_from_prediction(plan, prediction),
             document_id=session.document_id,
         )
 
@@ -701,20 +693,16 @@ def create_app(
                 detail=f"Session '{session_id}' not found.",
             )
         prediction = model.predict(session.features)
-        share_median = share_mean = None
-        if session.plan is not None:
-            share_median = apply_plan_to_annual_spend(
-                session.plan, prediction.median_charges_cents
-            )
-            share_mean = apply_plan_to_annual_spend(
-                session.plan, prediction.mean_charges_cents
-            )
+        interval = (
+            oop_interval_from_prediction(session.plan, prediction)
+            if session.plan is not None
+            else None
+        )
         return SessionEstimate(
             features=session.features,
             prediction=prediction,
             plan=session.plan,
-            annual_plan_share_median=share_median,
-            annual_plan_share_mean=share_mean,
+            oop_interval=interval,
             document_id=session.document_id,
         )
 
@@ -871,27 +859,26 @@ def _resolve_plan(
     return plan
 
 
-def _annual_shares_for(
+def _oop_interval_for(
     plan_id: str | None,
     prediction: CostPrediction,
     repo: CatalogRepository,
-) -> tuple[AnnualPlanShare | None, AnnualPlanShare | None]:
-    """Compute median and mean annual plan cost-shares for a prediction.
+) -> OopInterval | None:
+    """Compute the conformal OOP interval for a prediction against an optional plan.
 
     Parameters
     ----------
     plan_id : str or None
-        Plan to evaluate against. Returns ``(None, None)`` when ``None``.
+        Plan to evaluate against. Returns ``None`` when ``plan_id`` is ``None``.
     prediction : CostPrediction
-        Predicted charges used as annual spend input.
+        The charge prediction whose conformal interval is propagated.
     repo : CatalogRepository
         Catalog used to resolve the plan.
 
     Returns
     -------
-    tuple[AnnualPlanShare or None, AnnualPlanShare or None]
-        ``(median_share, mean_share)`` when a plan is resolved, else
-        ``(None, None)``.
+    OopInterval or None
+        Conformal OOP interval when a plan is resolved, else ``None``.
 
     Raises
     ------
@@ -900,11 +887,5 @@ def _annual_shares_for(
     """
     plan = _resolve_plan(plan_id, repo)
     if plan is None:
-        return None, None
-    median_share = apply_plan_to_annual_spend(
-        plan, prediction.median_charges_cents
-    )
-    mean_share = apply_plan_to_annual_spend(
-        plan, prediction.mean_charges_cents
-    )
-    return median_share, mean_share
+        return None
+    return oop_interval_from_prediction(plan, prediction)

@@ -230,7 +230,7 @@ def _make_session_store() -> SqliteSessionStore | InMemorySessionStore:
         ``SqliteSessionStore`` by default; ``InMemorySessionStore`` when
         ``GAUGE_NO_PERSIST=1``.
     """
-    if _NO_PERSIST:
+    if os.environ.get("GAUGE_NO_PERSIST", "0") == "1":
         logger.info("Session store: in-memory (GAUGE_NO_PERSIST=1)")
         return InMemorySessionStore()
     logger.info("Session store: SQLite at %s", _DB_PATH)
@@ -246,7 +246,7 @@ def _make_document_store() -> SqliteDocumentStore | InMemoryDocumentStore:
         ``SqliteDocumentStore`` by default; ``InMemoryDocumentStore`` when
         ``GAUGE_NO_PERSIST=1``.
     """
-    if _NO_PERSIST:
+    if os.environ.get("GAUGE_NO_PERSIST", "0") == "1":
         logger.info("Document store: in-memory (GAUGE_NO_PERSIST=1)")
         return InMemoryDocumentStore()
     logger.info("Document store: SQLite at %s", _DB_PATH)

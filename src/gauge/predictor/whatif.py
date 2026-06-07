@@ -1,12 +1,12 @@
 """What-if simulator.
 
-Holds a baseline feature vector fixed, varies a single feature across a
-list of values, and returns the prediction at each value. Optionally
-also pipes each prediction's median charges through a plan to give the
-annual out-of-pocket curve.
+Holds a baseline feature vector fixed, varies a single feature across a list
+of values, and returns the prediction at each value. When a plan is supplied,
+each prediction's conformal charge interval is propagated through the plan to
+produce an ``OopInterval`` alongside the raw prediction.
 
-The sweep is implemented with batched prediction so dozens of points run
-in roughly the same time as a single point.
+The sweep is implemented with batched prediction so dozens of points run in
+roughly the same time as a single point.
 """
 
 from __future__ import annotations
@@ -16,10 +16,7 @@ from typing import Union
 from pydantic import BaseModel, ConfigDict
 
 from gauge.benefits.models import Plan
-from gauge.predictor.annual_cost import (
-    AnnualPlanShare,
-    apply_plan_to_annual_spend,
-)
+from gauge.predictor.annual_cost import OopInterval, oop_interval_from_prediction
 from gauge.predictor.model import CostPrediction, CostPredictor
 from gauge.predictor.schemas import PredictionFeatures
 
@@ -28,18 +25,36 @@ SWEEPABLE_FEATURES: frozenset[str] = frozenset(PredictionFeatures.model_fields)
 
 
 class WhatIfPoint(BaseModel):
-    """A single point on a what-if sweep."""
+    """A single point on a what-if sweep.
+
+    Parameters
+    ----------
+    value : int, float, or str
+        The substituted feature value at this point.
+    prediction : CostPrediction
+        Predicted charges at this value (median, mean, conformal interval).
+    oop_interval : OopInterval or None
+        Conformal OOP interval obtained by propagating ``prediction`` through
+        the plan. ``None`` when no plan was provided to :func:`sweep`.
+    """
 
     model_config = ConfigDict(frozen=True)
 
     value: SweepValue
     prediction: CostPrediction
-    annual_plan_share_median: AnnualPlanShare | None = None
-    annual_plan_share_mean: AnnualPlanShare | None = None
+    oop_interval: OopInterval | None = None
 
 
 class WhatIfResponse(BaseModel):
-    """Result of varying one feature across a list of values."""
+    """Result of varying one feature across a list of values.
+
+    Parameters
+    ----------
+    feature : str
+        The name of the swept feature.
+    points : list[WhatIfPoint]
+        One entry per value in the sweep, in the same order.
+    """
 
     model_config = ConfigDict(frozen=True)
 
@@ -58,7 +73,8 @@ def sweep(
 
     Holds the baseline vector fixed except for ``feature``, substitutes each
     value in ``values``, and runs batched prediction over all resulting rows.
-    Optionally annotates each point with plan cost-share figures.
+    When a plan is provided, each prediction's conformal charge interval is
+    propagated through the plan to give an ``OopInterval`` at each point.
 
     Parameters
     ----------
@@ -73,9 +89,8 @@ def sweep(
         Values to substitute for ``feature``. Each must validate against
         the field's type.
     plan : Plan or None, optional
-        When provided, each prediction's median and mean charges are run
-        through :func:`~gauge.predictor.annual_cost.apply_plan_to_annual_spend`
-        to give annual out-of-pocket figures alongside the raw predictions.
+        When provided, each prediction's conformal interval is propagated
+        through the plan to produce an :class:`~gauge.predictor.annual_cost.OopInterval`.
 
     Returns
     -------
@@ -114,23 +129,7 @@ def sweep(
 
     points: list[WhatIfPoint] = []
     for value, prediction in zip(values, predictions):
-        if plan is not None:
-            share_median = apply_plan_to_annual_spend(
-                plan, prediction.median_charges_cents
-            )
-            share_mean = apply_plan_to_annual_spend(
-                plan, prediction.mean_charges_cents
-            )
-        else:
-            share_median = None
-            share_mean = None
-        points.append(
-            WhatIfPoint(
-                value=value,
-                prediction=prediction,
-                annual_plan_share_median=share_median,
-                annual_plan_share_mean=share_mean,
-            )
-        )
+        interval = oop_interval_from_prediction(plan, prediction) if plan is not None else None
+        points.append(WhatIfPoint(value=value, prediction=prediction, oop_interval=interval))
 
     return WhatIfResponse(feature=feature, points=points)

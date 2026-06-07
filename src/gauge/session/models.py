@@ -1,6 +1,6 @@
 """Session models tying user demographics, plan, and document together.
 
-A ``Session`` is the central context object for the guided flow.  It is
+A ``Session`` is the central context object for the guided flow. It is
 created when the user submits their demographics, enriched when they upload
 a plan document (which triggers automatic extraction into a ``PlanDraft``),
 and finalised when they confirm or correct the extracted plan fields.
@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from gauge.benefits.models import Plan
 from gauge.plan_extract.schemas import PlanDraft
-from gauge.predictor.annual_cost import AnnualPlanShare
+from gauge.predictor.annual_cost import OopInterval
 from gauge.predictor.model import CostPrediction
 from gauge.predictor.schemas import PredictionFeatures
 
@@ -69,23 +69,20 @@ class Session(BaseModel):
 class SessionEstimate(BaseModel):
     """The full personalised estimate for a completed session.
 
-    Combines the raw ML prediction with plan-specific cost-share breakdowns
-    when a confirmed plan is available.
+    Combines the raw ML prediction with a conformal OOP interval when a
+    confirmed plan is available.
 
     Parameters
     ----------
     features : PredictionFeatures
         Demographics used for the prediction.
     prediction : CostPrediction
-        Raw ML prediction (median, mean, 80 % interval) in cents.
+        Raw ML prediction (median, mean, 80 % conformal interval) in cents.
     plan : Plan or None
         The confirmed plan, or ``None`` if no plan has been set yet.
-    annual_plan_share_median : AnnualPlanShare or None
-        How the plan splits the *median* predicted spend.  ``None`` when
-        no plan is available.
-    annual_plan_share_mean : AnnualPlanShare or None
-        How the plan splits the *mean* predicted spend.  ``None`` when no
-        plan is available.
+    oop_interval : OopInterval or None
+        Conformal OOP interval derived by propagating ``prediction`` through
+        ``plan``. ``None`` when no plan has been confirmed.
     document_id : str or None
         ID of the uploaded plan document, for subsequent Q&A calls.
     """
@@ -95,8 +92,7 @@ class SessionEstimate(BaseModel):
     features: PredictionFeatures
     prediction: CostPrediction
     plan: Plan | None = None
-    annual_plan_share_median: AnnualPlanShare | None = None
-    annual_plan_share_mean: AnnualPlanShare | None = None
+    oop_interval: OopInterval | None = None
     document_id: str | None = None
 
 
@@ -143,7 +139,7 @@ class AttachDocumentResponse(BaseModel):
     document_id : str
         ID of the newly uploaded document.
     plan_draft : PlanDraft
-        Automatically extracted plan fields.  ``None`` values indicate
+        Automatically extracted plan fields. ``None`` values indicate
         fields the LLM could not find; the user should review and complete
         them on the confirmation form.
     """
@@ -157,7 +153,7 @@ class AttachDocumentResponse(BaseModel):
 class ConfirmPlanRequest(BaseModel):
     """Request body for ``POST /sessions/{id}/plan``.
 
-    Carries the user-reviewed (and possibly edited) plan fields.  The three
+    Carries the user-reviewed (and possibly edited) plan fields. The three
     required numeric fields must be provided and non-negative.
 
     Parameters

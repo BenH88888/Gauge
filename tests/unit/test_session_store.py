@@ -302,8 +302,7 @@ class TestSessionEstimate:
             prediction=self._prediction(),
         )
         assert est.plan is None
-        assert est.annual_plan_share_median is None
-        assert est.annual_plan_share_mean is None
+        assert est.oop_interval is None
         assert est.document_id is None
 
     def test_is_frozen(self) -> None:

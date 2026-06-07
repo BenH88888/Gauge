@@ -14,9 +14,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  AnnualPlanShare,
   ConfirmPlanRequest,
   CreateSessionResponse,
+  OopInterval,
   PlanDraft,
   Region,
   SessionEstimate,
@@ -581,58 +581,62 @@ function Step3Confirm({
 // ---------------------------------------------------------------------------
 
 /**
- * Renders a plan cost-share breakdown block.
+ * Hero block displaying the OOP interval as the primary estimate output.
  *
- * @param title - Section heading (e.g. "Typical year").
- * @param chargesCents - Raw predicted charges in cents.
- * @param share - Plan cost-share breakdown, or null if no plan is set.
+ * @param interval - 80%-coverage OOP interval from the server, or null before
+ *   a plan is confirmed.
+ * @param chargesCents - Median gross charges, shown as secondary context.
  */
 function EstimateBlock({
-  title,
+  interval,
   chargesCents,
-  share,
 }: {
-  title: string;
+  interval: OopInterval | null;
   chargesCents: number;
-  share: AnnualPlanShare | null;
 }) {
   return (
     <div className="bg-white p-6">
-      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-        {title}
-      </div>
-      <div className="mt-1 text-2xl font-semibold text-slate-900 tabular-nums">
-        {centsToDollars(chargesCents)}
-      </div>
-      <div className="text-xs text-slate-500">predicted gross charges</div>
-      {share && (
-        <div className="mt-4 border-t border-slate-100 pt-3">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            You pay
+      {interval ? (
+        <>
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+            You'll likely pay out of pocket
           </div>
-          <div className="text-xl font-semibold text-brand-700 tabular-nums">
-            {centsToDollars(share.member_pays_cents)}
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-3xl font-bold tracking-tight text-brand-600 tabular-nums">
+              {centsToDollars(interval.lower_cents)}
+            </span>
+            <span className="text-lg font-medium text-slate-400">to</span>
+            <span className="text-3xl font-bold tracking-tight text-brand-600 tabular-nums">
+              {centsToDollars(interval.upper_cents)}
+            </span>
           </div>
-          <dl className="mt-2 grid grid-cols-2 gap-y-0.5 text-xs">
-            <dt className="text-slate-500">Deductible</dt>
-            <dd className="text-right tabular-nums">
-              {centsToDollars(share.deductible_applied_cents)}
-            </dd>
-            <dt className="text-slate-500">Coinsurance</dt>
-            <dd className="text-right tabular-nums">
-              {centsToDollars(share.coinsurance_cents)}
-            </dd>
-            <dt className="text-slate-500">Plan pays</dt>
-            <dd className="text-right tabular-nums">
-              {centsToDollars(share.plan_pays_cents)}
-            </dd>
-          </dl>
-          {share.capped_at_oop_max && (
-            <div className="mt-2 rounded bg-emerald-50 px-2 py-1 text-xs text-emerald-700">
-              Out-of-pocket maximum reached — plan absorbs the rest.
+          <div className="mt-1 text-xs text-slate-500">
+            80% confidence interval · median{" "}
+            <span className="tabular-nums font-medium text-slate-700">
+              {centsToDollars(interval.median_cents)}
+            </span>
+          </div>
+          {(interval.capped_at_oop_max_lower || interval.capped_at_oop_max_upper) && (
+            <div className="mt-3 rounded bg-emerald-50 px-2 py-1.5 text-xs text-emerald-700">
+              Upper end capped at your plan's out-of-pocket maximum.
             </div>
           )}
-        </div>
+          <div className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-400">
+            Predicted gross charges: {centsToDollars(chargesCents)}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Predicted annual charges
+          </div>
+          <div className="mt-1 text-2xl font-semibold text-slate-900 tabular-nums">
+            {centsToDollars(chargesCents)}
+          </div>
+          <div className="text-xs text-slate-500">
+            median — confirm a plan to see your out-of-pocket cost
+          </div>
+        </>
       )}
     </div>
   );
@@ -655,8 +659,7 @@ function Step4Estimate({
   sessionId: string;
   onRestart: () => void;
 }) {
-  const { prediction, plan, annual_plan_share_median, annual_plan_share_mean, document_id } =
-    estimate;
+  const { prediction, plan, oop_interval, document_id } = estimate;
 
   // What-if state
   const [sweepFeature, setSweepFeature] = useState<SweepFeature>("age");
@@ -733,27 +736,19 @@ function Step4Estimate({
         </button>
       </div>
 
-      {/* Prediction + plan breakdown */}
+      {/* OOP interval hero + charge context footer */}
       <div className="overflow-hidden rounded-xl border border-slate-200 shadow-card">
-        <div className="grid grid-cols-1 gap-px bg-slate-100 sm:grid-cols-2">
-          <EstimateBlock
-            title="Typical year (median)"
-            chargesCents={prediction.median_charges_cents}
-            share={annual_plan_share_median}
-          />
-          <EstimateBlock
-            title="Long-run average (mean)"
-            chargesCents={prediction.mean_charges_cents}
-            share={annual_plan_share_mean}
-          />
-        </div>
-        <div className="border-t border-slate-200 bg-white px-6 py-3 text-xs text-slate-500">
-          80% interval:{" "}
-          <span className="tabular-nums">
+        <EstimateBlock
+          interval={oop_interval}
+          chargesCents={prediction.median_charges_cents}
+        />
+        <div className="border-t border-slate-200 bg-slate-50 px-6 py-3 text-xs text-slate-500">
+          80% charge interval:{" "}
+          <span className="tabular-nums font-medium text-slate-700">
             {centsToDollars(prediction.lower_bound_cents)}
           </span>{" "}
           to{" "}
-          <span className="tabular-nums">
+          <span className="tabular-nums font-medium text-slate-700">
             {centsToDollars(prediction.upper_bound_cents)}
           </span>
         </div>

@@ -10,19 +10,19 @@ const TABS: { id: Tab; label: string; description: string }[] = [
     id: "guided",
     label: "Get my estimate",
     description:
-      "Step-by-step guided flow: enter your details, upload your plan PDF, and get a personalised cost estimate with a full plan cost-share breakdown.",
+      "Answer a few questions, upload your plan PDF, and Gauge gives you a calibrated out-of-pocket range — not a single guess, but an honest interval with 80% coverage.",
   },
   {
     id: "predictor",
-    label: "Cost predictor",
+    label: "Explore costs",
     description:
-      "ML model trained on real insurance data. Adjust your details to see annual charges with an 80% prediction interval and what you'd actually pay on a chosen plan.",
+      "See how your predicted charges and out-of-pocket cost shift as you vary age, BMI, smoking status, or plan. Every estimate carries a real uncertainty interval.",
   },
   {
     id: "docchat",
-    label: "Document chat",
+    label: "Ask your plan",
     description:
-      "Upload a plan PDF — Summary of Benefits, Evidence of Coverage, anything. Ask questions in plain English and get answers with page citations.",
+      "Upload any plan PDF — Summary of Benefits, Evidence of Coverage, or your EOB. Ask plain-English questions and get answers cited to the exact pages.",
   },
 ];
 
@@ -71,10 +71,10 @@ export default function App() {
             <BrandIcon />
             <div>
               <h1 className="text-lg font-semibold leading-none tracking-tight text-slate-900">
-                ClearPlan
+                Gauge
               </h1>
               <p className="mt-0.5 text-xs text-slate-500">
-                Health insurance cost estimator
+                Calibrated health insurance cost estimation
               </p>
             </div>
           </div>

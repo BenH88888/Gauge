@@ -119,9 +119,9 @@ def test_journey_full_guided_flow(
     estimate = confirm_resp.json()
     assert estimate["plan"]["name"] == "Journey Plan"
     assert estimate["document_id"] == doc_id
-    share = estimate["annual_plan_share_median"]
-    assert share is not None
-    assert share["member_pays_cents"] + share["plan_pays_cents"] == share["charges_cents"]
+    interval = estimate["oop_interval"]
+    assert interval is not None
+    assert interval["lower_cents"] <= interval["median_cents"] <= interval["upper_cents"]
 
     # Step 4a: fetch estimate via GET
     get_est = client.get(f"/sessions/{sid}/estimate")
@@ -174,7 +174,7 @@ def test_journey_skip_pdf_manual_plan_entry(client: TestClient) -> None:
 
     # Step 3: confirm plan without a document
     confirm = client.post(f"/sessions/{sid}/plan", json=_plan_payload()).json()
-    assert confirm["annual_plan_share_median"] is not None
+    assert confirm["oop_interval"] is not None
     assert confirm["document_id"] is None
 
     # Step 4: what-if still works
@@ -244,10 +244,7 @@ def test_journey_reconfirm_plan_updates_estimate(client: TestClient) -> None:
     assert est2["plan"]["deductible_cents"] == 500_000
 
     # A higher deductible should mean equal or higher member OOP.
-    assert (
-        est2["annual_plan_share_median"]["member_pays_cents"]
-        >= est1["annual_plan_share_median"]["member_pays_cents"]
-    )
+    assert est2["oop_interval"]["median_cents"] >= est1["oop_interval"]["median_cents"]
 
 
 # ---------------------------------------------------------------------------
@@ -321,7 +318,5 @@ def test_journey_oop_cap_respected_in_estimate(client: TestClient) -> None:
         ),
     ).json()
 
-    share_median = est["annual_plan_share_median"]
-    share_mean = est["annual_plan_share_mean"]
-    assert share_median["member_pays_cents"] <= oop_max_cents
-    assert share_mean["member_pays_cents"] <= oop_max_cents
+    interval = est["oop_interval"]
+    assert interval["upper_cents"] <= oop_max_cents

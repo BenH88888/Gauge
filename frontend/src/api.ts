@@ -1,9 +1,9 @@
 /**
- * Tiny typed client for the health-app FastAPI backend.
+ * Typed client for the Gauge FastAPI backend.
  *
- * The base URL is read from the VITE_API_BASE env var at build time so
- * the same bundle can be pointed at a local dev backend or a deployed
- * one without code changes.
+ * The base URL is read from the VITE_API_BASE env var at build time so the
+ * same bundle can be pointed at a local dev backend or a deployed one without
+ * code changes.
  */
 
 const BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
@@ -26,21 +26,33 @@ export interface CostPrediction {
   mean_charges_cents: number;
   lower_bound_cents: number;
   upper_bound_cents: number;
+  conformal_calibrated: boolean;
+  calibration_coverage: number;
 }
 
-export interface AnnualPlanShare {
-  charges_cents: number;
-  deductible_applied_cents: number;
-  coinsurance_cents: number;
-  member_pays_cents: number;
-  plan_pays_cents: number;
-  capped_at_oop_max: boolean;
+/**
+ * An 80%-coverage interval for out-of-pocket spend under a specific plan.
+ *
+ * Derived analytically from the conformal charge interval — no simulation
+ * required.  `lower_cents` and `upper_cents` bracket the same 80% of
+ * real-world outcomes that the conformal prediction guarantees for charges.
+ */
+export interface OopInterval {
+  lower_cents: number;
+  median_cents: number;
+  upper_cents: number;
+  /** Inherited calibration coverage (≈ 0.80). */
+  coverage: number | null;
+  /** True if the lower bound was capped at the plan OOP max. */
+  capped_at_oop_max_lower: boolean;
+  /** True if the upper bound was capped at the plan OOP max. */
+  capped_at_oop_max_upper: boolean;
 }
 
 export interface PredictResponse {
   prediction: CostPrediction;
-  annual_plan_share_median: AnnualPlanShare | null;
-  annual_plan_share_mean: AnnualPlanShare | null;
+  /** Present only when a plan_id was supplied to /predict. */
+  oop_interval: OopInterval | null;
 }
 
 export type SweepFeature =
@@ -54,8 +66,8 @@ export type SweepFeature =
 export interface WhatIfPoint {
   value: number | string;
   prediction: CostPrediction;
-  annual_plan_share_median: AnnualPlanShare | null;
-  annual_plan_share_mean: AnnualPlanShare | null;
+  /** Present only when a plan_id was supplied to /whatif. */
+  oop_interval: OopInterval | null;
 }
 
 export interface WhatIfResponse {
@@ -228,13 +240,13 @@ export interface PlanDraft {
   extraction_notes: string[];
 }
 
-/** Full personalised estimate combining ML prediction and plan cost-share. */
+/** Full personalised estimate combining ML prediction and plan OOP interval. */
 export interface SessionEstimate {
   features: PredictionFeatures;
   prediction: CostPrediction;
   plan: Plan | null;
-  annual_plan_share_median: AnnualPlanShare | null;
-  annual_plan_share_mean: AnnualPlanShare | null;
+  /** Present once a plan has been confirmed; null otherwise. */
+  oop_interval: OopInterval | null;
   document_id: string | null;
 }
 
@@ -321,7 +333,7 @@ export function getSessionPlanDraft(sessionId: string): Promise<PlanDraft> {
  *
  * @param sessionId - Target session.
  * @param req - User-reviewed plan fields.
- * @returns Full personalised estimate with plan cost-share breakdown.
+ * @returns Full personalised estimate with OOP interval.
  */
 export function confirmSessionPlan(
   sessionId: string,
@@ -337,7 +349,7 @@ export function confirmSessionPlan(
  * Fetch the current estimate for a session.
  *
  * @param sessionId - Target session.
- * @returns Current estimate; plan breakdown is `null` until a plan is confirmed.
+ * @returns Current estimate; OOP interval is `null` until a plan is confirmed.
  */
 export function getSessionEstimate(sessionId: string): Promise<SessionEstimate> {
   return getJSON<SessionEstimate>(

@@ -38,8 +38,8 @@ def test_sweep_returns_one_point_per_value(
     )
     assert response.feature == "age"
     assert [p.value for p in response.points] == values
-    assert all(p.annual_plan_share_median is None for p in response.points)
-    assert all(p.annual_plan_share_mean is None for p in response.points)
+    # No plan supplied — OOP interval should be absent.
+    assert all(p.oop_interval is None for p in response.points)
 
 
 def test_sweep_empty_values_returns_empty(
@@ -69,11 +69,12 @@ def test_sweep_charges_increase_with_age(
     assert charges[0] < charges[2]
 
 
-def test_sweep_with_plan_includes_annual_plan_share(
+def test_sweep_with_plan_returns_oop_interval(
     trained_predictor: CostPredictor,
     baseline_features: PredictionFeatures,
     ppo_gold: Plan,
 ) -> None:
+    """Each point should have a valid OOP interval; smokers cost more OOP."""
     response = sweep(
         predictor=trained_predictor,
         baseline=baseline_features,
@@ -83,18 +84,17 @@ def test_sweep_with_plan_includes_annual_plan_share(
     )
     assert len(response.points) == 2
     for point in response.points:
-        assert point.annual_plan_share_median is not None
-        assert point.annual_plan_share_mean is not None
-        assert (
-            point.annual_plan_share_median.member_pays_cents
-            + point.annual_plan_share_median.plan_pays_cents
-            == point.prediction.median_charges_cents
-        )
-        assert (
-            point.annual_plan_share_mean.member_pays_cents
-            + point.annual_plan_share_mean.plan_pays_cents
-            == point.prediction.mean_charges_cents
-        )
+        interval = point.oop_interval
+        assert interval is not None
+        # Monotonicity: lower ≤ median ≤ upper in OOP space.
+        assert interval.lower_cents <= interval.median_cents
+        assert interval.median_cents <= interval.upper_cents
+        # Width is non-negative.
+        assert interval.width_cents >= 0
+
+    non_smoker, smoker = response.points
+    # Smokers should have a higher median OOP than non-smokers.
+    assert smoker.oop_interval.median_cents >= non_smoker.oop_interval.median_cents  # type: ignore[union-attr]
 
 
 def test_sweep_invalid_value_for_feature_raises(
