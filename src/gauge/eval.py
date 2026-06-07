@@ -232,7 +232,9 @@ def three_way_split(
     seed: int,
     train_frac: float = 0.60,
     cal_frac: float = 0.20,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, npt.NDArray[Any], npt.NDArray[Any], npt.NDArray[Any]]:
+) -> tuple[
+    pd.DataFrame, pd.DataFrame, pd.DataFrame, npt.NDArray[Any], npt.NDArray[Any], npt.NDArray[Any]
+]:
     """Shuffle and split ``df`` into train / calibration / test sets.
 
     Parameters
@@ -321,7 +323,9 @@ class QuantileModel:
         hi = np.maximum(0.0, self.q_hi.predict(X) + q)
         return lo, med, hi
 
-    def predict_raw(self, X: pd.DataFrame) -> tuple[npt.NDArray[Any], npt.NDArray[Any], npt.NDArray[Any]]:
+    def predict_raw(
+        self, X: pd.DataFrame
+    ) -> tuple[npt.NDArray[Any], npt.NDArray[Any], npt.NDArray[Any]]:
         """Predict with the un-conformalized (raw) quantile interval.
 
         Parameters
