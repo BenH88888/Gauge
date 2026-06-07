@@ -26,7 +26,10 @@ from typing import Any
 import matplotlib
 
 matplotlib.use("Agg")  # headless — no display required
+import matplotlib.figure
+import matplotlib.patches
 import matplotlib.pyplot as plt
+import matplotlib.ticker
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
@@ -706,7 +709,7 @@ def aggregate(results: list[SeedResult]) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def _save(fig: plt.Figure, name: str) -> None:
+def _save(fig: matplotlib.figure.Figure, name: str) -> None:
     """Save figure as PNG (150 dpi) and SVG into FIGURES_DIR."""
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     fig.savefig(FIGURES_DIR / f"{name}.png", dpi=150, bbox_inches="tight")
@@ -726,7 +729,7 @@ def plot_charge_distribution(df: pd.DataFrame, source_label: str) -> None:
         # Log-spaced bins
         lo_exp = np.log10(max(charges.min(), 1.0))
         hi_exp = np.log10(charges.max())
-        bins = np.logspace(lo_exp, hi_exp, 50)
+        bins: list[float] = np.logspace(lo_exp, hi_exp, 50).tolist()
         ax.hist(charges, bins=bins, color=C_CQR, alpha=0.75, edgecolor="white", linewidth=0.4)
         ax.axvline(
             np.mean(charges),
@@ -743,7 +746,7 @@ def plot_charge_distribution(df: pd.DataFrame, source_label: str) -> None:
             label=f"Median ${np.median(charges):,.0f}",
         )
         ax.set_xscale("log")
-        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.0f}"))
+        ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, _: f"${x:,.0f}"))
         ax.set_xlabel("Annual charges (USD, log scale)")
         ax.set_ylabel("Count")
         ax.set_title(
@@ -811,8 +814,8 @@ def plot_coverage_calibration(agg: dict[str, Any]) -> None:
         ax.set_ylabel("Empirical coverage")
         ax.set_xlim(0.45, 1.0)
         ax.set_ylim(0.45, 1.0)
-        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
-        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
+        ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, _: f"{x:.0%}"))
+        ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, _: f"{x:.0%}"))
         ax.set_title(
             "Coverage calibration: CQR vs raw quantile interval\n"
             "CQR achieves the target; raw quantile chronically under-covers."
@@ -857,7 +860,7 @@ def plot_conditional_coverage(agg: dict[str, Any]) -> None:
         ax.set_yticks(y_pos)
         ax.set_yticklabels(labels, fontsize=10)
         ax.set_xlabel("Empirical coverage at 80% nominal level")
-        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
+        ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, _: f"{x:.0%}"))
         ax.set_xlim(0.5, 1.0)
         ax.set_title(
             "Conditional coverage by subgroup (80% target)\n"
@@ -880,7 +883,7 @@ def plot_predicted_vs_actual(seed_result: SeedResult) -> None:
     lo = seed_result.y_pred_lo
     hi = seed_result.y_pred_hi
 
-    in_interval = (y >= lo) & (y <= hi)  # type: ignore[operator]
+    in_interval = (y >= lo) & (y <= hi)
     coverage = float(in_interval.mean())
 
     with plt.rc_context(_RC):
@@ -913,8 +916,8 @@ def plot_predicted_vs_actual(seed_result: SeedResult) -> None:
 
         ax.set_xscale("log")
         ax.set_yscale("log")
-        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.0f}"))
-        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.0f}"))
+        ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, _: f"${x:,.0f}"))
+        ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, _: f"${x:,.0f}"))
         ax.set_xlabel("Actual annual charges (USD, log scale)")
         ax.set_ylabel("Predicted median charges (USD, log scale)")
         ax.set_title(
@@ -975,7 +978,7 @@ def plot_benchmark(agg: dict[str, Any]) -> None:
             ax.set_yticklabels([model_names[i] for i in order], fontsize=10)
             ax.set_xlabel(xlabel)
             ax.set_title(title)
-            ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.0f}"))
+            ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, _: f"${x:,.0f}"))
 
         fig.suptitle(
             f"Model benchmark on held-out test set — mean ± std over {N_SEEDS} seeds\n"
@@ -1031,7 +1034,7 @@ def plot_architecture() -> None:
     ax.axis("off")
 
     for x, y, w, h, title, sub in stages:
-        rect = plt.Rectangle(
+        rect = matplotlib.patches.Rectangle(
             (x - w / 2, y - h / 2),
             w,
             h,
@@ -1177,7 +1180,7 @@ def plot_oop_transform(seed_result: SeedResult, source_label: str) -> None:
             label=f"OOP max reached: >\\${cap_charge:,.0f}",
         )
         ax_c.set_xscale("log")
-        ax_c.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"\\${x:,.0f}"))
+        ax_c.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, _: f"\\${x:,.0f}"))
         ax_c.set_xlabel("Annual gross charges (USD, log scale)")
         ax_c.set_ylabel("Count")
         ax_c.set_title(f"Annual Gross Charges\nRight-skewed; 80% CI spans \\${charge_width:,.0f}.")
@@ -1213,7 +1216,7 @@ def plot_oop_transform(seed_result: SeedResult, source_label: str) -> None:
             va="top",
             ha="right",
         )
-        ax_o.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"\\${x:,.0f}"))
+        ax_o.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, _: f"\\${x:,.0f}"))
         ax_o.set_xlabel("Out-of-pocket cost (USD)")
         ax_o.set_ylabel("Count")
         ax_o.set_title(

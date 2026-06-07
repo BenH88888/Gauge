@@ -790,7 +790,7 @@ def create_app(
             )
         try:
             return service.ask(
-                document_id=session.document_id,  # type: ignore[arg-type]
+                document_id=session.document_id,
                 question=request.question,
                 top_k=request.top_k,
             )

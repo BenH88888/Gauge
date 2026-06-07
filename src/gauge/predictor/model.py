@@ -42,6 +42,7 @@ import joblib
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel, ConfigDict
+from sklearn.base import BaseEstimator
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.pipeline import Pipeline
@@ -176,7 +177,7 @@ def _build_mean_pipeline() -> Pipeline:
     )
 
 
-def _build_pipeline(regressor) -> Pipeline:
+def _build_pipeline(regressor: BaseEstimator) -> Pipeline:
     """Wrap a regressor in a standard preprocessing pipeline.
 
     Parameters
