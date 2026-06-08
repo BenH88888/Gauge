@@ -41,8 +41,8 @@ import { WhatIfChart } from "./WhatIfChart";
 // Types
 // ---------------------------------------------------------------------------
 
-/** Which step of the wizard the user is currently on (1-indexed). */
-type Step = 1 | 2 | 3 | 4;
+/** Which step of the wizard the user is currently on (0 = landing, 1–4 = intake). */
+type Step = 0 | 1 | 2 | 3 | 4;
 
 const REGIONS: Region[] = ["northeast", "midwest", "south", "west"];
 
@@ -68,20 +68,107 @@ function sweepValuesFor(feature: SweepFeature): Array<number | string> {
 }
 
 // ---------------------------------------------------------------------------
+// Step 0 — Landing screen
+// ---------------------------------------------------------------------------
+
+/**
+ * Hero landing screen shown before the intake flow begins.
+ *
+ * Communicates the product's single thesis and the four load-bearing steps in
+ * plain language, then hands off to the intake wizard on "Get started".
+ *
+ * @param onStart - Called when the user clicks the CTA.
+ */
+function Step0Landing({ onStart }: { onStart: () => void }) {
+  const steps = [
+    {
+      icon: "👤",
+      title: "Tell us about yourself",
+      body: "Age, health profile, and a few quick details to seed the prediction.",
+    },
+    {
+      icon: "📄",
+      title: "Upload your plan PDF",
+      body: "Drop your Summary of Benefits and Coverage — we'll pull out deductible, OOP max, and copays automatically.",
+    },
+    {
+      icon: "📊",
+      title: "Get your estimate",
+      body: "An 80% confidence range for what you'll actually pay out of pocket this year.",
+    },
+    {
+      icon: "💬",
+      title: "Ask anything",
+      body: "A chatbot grounded in your real plan answers follow-up questions with page citations.",
+    },
+  ];
+
+  return (
+    <div className="flex min-h-[70vh] flex-col items-center justify-center px-4 py-16 text-center">
+      {/* Hero */}
+      <div className="max-w-2xl">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-brand-600">
+          Gauge
+        </p>
+        <h1 className="text-4xl font-bold leading-tight tracking-tight text-slate-900 sm:text-5xl">
+          What will you actually pay
+          <br />
+          <span className="text-brand-600">this year?</span>
+        </h1>
+        <p className="mx-auto mt-5 max-w-xl text-lg text-slate-600">
+          Gauge reads your real insurance plan, predicts your annual costs with
+          calibrated uncertainty, and answers your questions — in under two
+          minutes.
+        </p>
+        <button
+          type="button"
+          onClick={onStart}
+          className="mt-8 rounded-lg bg-brand-600 px-8 py-3.5 text-base font-semibold text-white shadow-sm hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
+        >
+          Get started →
+        </button>
+        <p className="mt-3 text-xs text-slate-400">
+          Nothing is stored beyond your browser session.
+        </p>
+      </div>
+
+      {/* How it works */}
+      <div className="mt-16 grid w-full max-w-3xl grid-cols-2 gap-4 text-left sm:grid-cols-4">
+        {steps.map((s, i) => (
+          <div
+            key={i}
+            className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+          >
+            <div className="mb-2 text-2xl">{s.icon}</div>
+            <p className="text-sm font-semibold text-slate-800">{s.title}</p>
+            <p className="mt-1 text-xs leading-relaxed text-slate-500">{s.body}</p>
+          </div>
+        ))}
+      </div>
+
+      <p className="mt-10 text-xs text-slate-400">
+        Illustrative prototype — not a substitute for an actual insurance quote
+        or advice from your insurer.
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Step indicator
 // ---------------------------------------------------------------------------
 
 /**
  * Horizontal stepper showing the user's position in the four-step flow.
  *
- * @param current - Current step number (1-indexed).
+ * @param current - Current step number (1-indexed; step 0 landing is never shown here).
  * @param labels - Display label for each step.
  */
 function StepBar({
   current,
   labels,
 }: {
-  current: Step;
+  current: 1 | 2 | 3 | 4;
   labels: string[];
 }) {
   return (
@@ -643,8 +730,10 @@ function EstimateBlock({
 }
 
 /**
- * The final step: shows the full personalised estimate, a what-if chart keyed
- * to the session, and an inline Q&A panel if a document was attached.
+ * The final step: two-column layout with the estimate + what-if chart on the
+ * left and a sticky chatbot panel on the right.
+ *
+ * On narrow viewports the columns stack vertically (report first, chat below).
  *
  * @param estimate - Initial estimate from the confirmSessionPlan call.
  * @param sessionId - Active session (used for what-if and chat requests).
@@ -674,6 +763,7 @@ function Step4Estimate({
     { question: string; answer: string; pages: number[] }[]
   >([]);
   const [chatError, setChatError] = useState<string | null>(null);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
 
   // Fire what-if whenever the sweep feature changes
   useEffect(() => {
@@ -689,6 +779,11 @@ function Step4Estimate({
 
     return () => { cancelled = true; };
   }, [sessionId, sweepFeature]);
+
+  // Scroll chat to bottom whenever a new message arrives
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages]);
 
   async function handleAsk() {
     if (!question.trim() || !document_id) return;
@@ -713,8 +808,8 @@ function Step4Estimate({
   }
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
+    <div className="space-y-4">
+      {/* Page header */}
       <div className="flex items-start justify-between">
         <div>
           <h2 className="text-xl font-semibold text-slate-900">Your estimate</h2>
@@ -736,101 +831,151 @@ function Step4Estimate({
         </button>
       </div>
 
-      {/* OOP interval hero + charge context footer */}
-      <div className="overflow-hidden rounded-xl border border-slate-200 shadow-card">
-        <EstimateBlock
-          interval={oop_interval}
-          chargesCents={prediction.median_charges_cents}
-        />
-        <div className="border-t border-slate-200 bg-slate-50 px-6 py-3 text-xs text-slate-500">
-          80% charge interval:{" "}
-          <span className="tabular-nums font-medium text-slate-700">
-            {centsToDollars(prediction.lower_bound_cents)}
-          </span>{" "}
-          to{" "}
-          <span className="tabular-nums font-medium text-slate-700">
-            {centsToDollars(prediction.upper_bound_cents)}
-          </span>
-        </div>
-      </div>
+      {/* Two-column body */}
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
 
-      {/* What-if */}
-      <section className="space-y-3">
-        <div className="flex items-end justify-between">
-          <div>
-            <h3 className="text-base font-semibold text-slate-900">What-if</h3>
-            <p className="text-sm text-slate-600">
-              Hold everything else fixed and vary one factor.
-            </p>
-          </div>
-          <Select<SweepFeature>
-            label="Vary"
-            value={sweepFeature}
-            onChange={setSweepFeature}
-            options={SWEEP_OPTIONS}
-          />
-        </div>
-        <WhatIfChart
-          data={sweep}
-          loading={sweepLoading}
-          error={sweepError}
-          feature={sweepFeature}
-        />
-      </section>
-
-      {/* Q&A (only shown when a document is attached) */}
-      {document_id && (
-        <section className="space-y-4">
-          <div>
-            <h3 className="text-base font-semibold text-slate-900">
-              Ask your plan document
-            </h3>
-            <p className="text-sm text-slate-600">
-              Ask anything about your plan in plain English — coverage, copays,
-              exclusions. Answers are pulled directly from the pages you uploaded.
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            {chatMessages.map((m, i) => (
-              <div key={i} className="rounded-lg border border-slate-200 bg-white p-4 text-sm">
-                <p className="font-medium text-slate-900">{m.question}</p>
-                <p className="mt-2 text-slate-700 whitespace-pre-wrap">{m.answer}</p>
-                {m.pages.length > 0 && (
-                  <p className="mt-2 text-xs text-slate-400">
-                    Source pages: {[...new Set(m.pages)].sort((a, b) => a - b).join(", ")}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {chatError && (
-            <div className="rounded bg-red-50 px-4 py-3 text-sm text-red-700">
-              {chatError}
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") void handleAsk(); }}
-              placeholder="e.g. Is physical therapy covered?"
-              className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+        {/* ── Left column: estimate + what-if ── */}
+        <div className="min-w-0 flex-1 space-y-6">
+          {/* OOP interval hero */}
+          <div className="overflow-hidden rounded-xl border border-slate-200 shadow-card">
+            <EstimateBlock
+              interval={oop_interval}
+              chargesCents={prediction.median_charges_cents}
             />
-            <button
-              type="button"
-              onClick={() => void handleAsk()}
-              disabled={chatLoading || !question.trim()}
-              className="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
-            >
-              {chatLoading ? "…" : "Ask"}
-            </button>
+            <div className="border-t border-slate-200 bg-slate-50 px-6 py-3 text-xs text-slate-500">
+              80% charge interval:{" "}
+              <span className="tabular-nums font-medium text-slate-700">
+                {centsToDollars(prediction.lower_bound_cents)}
+              </span>{" "}
+              to{" "}
+              <span className="tabular-nums font-medium text-slate-700">
+                {centsToDollars(prediction.upper_bound_cents)}
+              </span>
+            </div>
           </div>
-        </section>
-      )}
+
+          {/* What-if */}
+          <section className="space-y-3">
+            <div className="flex items-end justify-between">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">What-if</h3>
+                <p className="text-sm text-slate-600">
+                  Hold everything else fixed and vary one factor.
+                </p>
+              </div>
+              <Select<SweepFeature>
+                label="Vary"
+                value={sweepFeature}
+                onChange={setSweepFeature}
+                options={SWEEP_OPTIONS}
+              />
+            </div>
+            <WhatIfChart
+              data={sweep}
+              loading={sweepLoading}
+              error={sweepError}
+              feature={sweepFeature}
+            />
+          </section>
+        </div>
+
+        {/* ── Right column: chatbot panel ── */}
+        <div className="w-full shrink-0 lg:sticky lg:top-6 lg:w-96">
+          <div className="flex h-[32rem] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card lg:h-[calc(100vh-8rem)]">
+            {/* Chat header */}
+            <div className="border-b border-slate-200 px-4 py-3">
+              <h3 className="text-sm font-semibold text-slate-900">
+                Ask your plan
+              </h3>
+              <p className="mt-0.5 text-xs text-slate-500">
+                {document_id
+                  ? "Answers grounded in the pages you uploaded."
+                  : "Upload a plan PDF to enable document Q&A."}
+              </p>
+            </div>
+
+            {/* Message list */}
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+              {chatMessages.length === 0 && (
+                <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+                  <span className="text-3xl">💬</span>
+                  <p className="text-sm text-slate-500">
+                    {document_id
+                      ? 'Try "Is physical therapy covered?" or "What\'s my emergency copay?"'
+                      : "Upload a plan PDF in step 2 to chat with your document."}
+                  </p>
+                </div>
+              )}
+
+              {chatMessages.map((m, i) => (
+                <div key={i} className="space-y-1">
+                  {/* User bubble */}
+                  <div className="flex justify-end">
+                    <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-brand-600 px-3 py-2 text-sm text-white">
+                      {m.question}
+                    </div>
+                  </div>
+                  {/* Assistant bubble */}
+                  <div className="flex justify-start">
+                    <div className="max-w-[85%] space-y-1 rounded-2xl rounded-tl-sm border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
+                      <p className="whitespace-pre-wrap">{m.answer}</p>
+                      {m.pages.length > 0 && (
+                        <p className="text-xs text-slate-400">
+                          Pages {[...new Set(m.pages)].sort((a, b) => a - b).join(", ")}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {chatLoading && (
+                <div className="flex justify-start">
+                  <div className="rounded-2xl rounded-tl-sm border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-400">
+                    Thinking…
+                  </div>
+                </div>
+              )}
+
+              {chatError && (
+                <div className="rounded bg-red-50 px-3 py-2 text-xs text-red-700">
+                  {chatError}
+                </div>
+              )}
+
+              <div ref={chatBottomRef} />
+            </div>
+
+            {/* Input bar */}
+            <div className="border-t border-slate-200 px-3 py-3">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={question}
+                  onChange={(e) => setQuestion(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") void handleAsk(); }}
+                  disabled={!document_id}
+                  placeholder={
+                    document_id
+                      ? "Ask about your plan…"
+                      : "Upload a PDF to enable chat"
+                  }
+                  className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleAsk()}
+                  disabled={chatLoading || !question.trim() || !document_id}
+                  className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-40"
+                >
+                  {chatLoading ? "…" : "↑"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 }
@@ -840,17 +985,18 @@ function Step4Estimate({
 // ---------------------------------------------------------------------------
 
 /**
- * Orchestrates the four-step intake flow.  Manages step transitions and
- * passes shared state (session ID, plan draft, final estimate) between steps.
+ * Orchestrates the full flow: landing (step 0) followed by the four-step
+ * intake wizard.  Manages step transitions and passes shared state (session
+ * ID, plan draft, final estimate) between steps.
  */
 export function IntakeWizard() {
-  const [step, setStep] = useState<Step>(1);
+  const [step, setStep] = useState<Step>(0);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [draft, setDraft] = useState<PlanDraft | null>(null);
   const [estimate, setEstimate] = useState<SessionEstimate | null>(null);
 
   function restart() {
-    setStep(1);
+    setStep(0);
     setSessionId(null);
     setDraft(null);
     setEstimate(null);
@@ -868,42 +1014,50 @@ export function IntakeWizard() {
 
   return (
     <div>
-      <StepBar
-        current={step}
-        labels={["Your info", "Your plan", "Confirm", "Estimate"]}
-      />
+      {/* Landing screen — no step bar */}
+      {step === 0 && <Step0Landing onStart={() => setStep(1)} />}
 
-      {step === 1 && (
-        <Step1Demographics
-          onDone={(resp) => {
-            setSessionId(resp.session_id);
-            setStep(2);
-          }}
-        />
-      )}
+      {/* Intake wizard steps 1–4 */}
+      {step !== 0 && (
+        <>
+          <StepBar
+            current={step as 1 | 2 | 3 | 4}
+            labels={["Your info", "Your plan", "Confirm", "Estimate"]}
+          />
 
-      {step === 2 && sessionId && (
-        <Step2Upload
-          sessionId={sessionId}
-          onDone={(d) => { setDraft(d); setStep(3); }}
-          onSkip={() => { setDraft(emptyDraft); setStep(3); }}
-        />
-      )}
+          {step === 1 && (
+            <Step1Demographics
+              onDone={(resp) => {
+                setSessionId(resp.session_id);
+                setStep(2);
+              }}
+            />
+          )}
 
-      {step === 3 && sessionId && draft && (
-        <Step3Confirm
-          draft={draft}
-          sessionId={sessionId}
-          onDone={(est) => { setEstimate(est); setStep(4); }}
-        />
-      )}
+          {step === 2 && sessionId && (
+            <Step2Upload
+              sessionId={sessionId}
+              onDone={(d) => { setDraft(d); setStep(3); }}
+              onSkip={() => { setDraft(emptyDraft); setStep(3); }}
+            />
+          )}
 
-      {step === 4 && sessionId && estimate && (
-        <Step4Estimate
-          estimate={estimate}
-          sessionId={sessionId}
-          onRestart={restart}
-        />
+          {step === 3 && sessionId && draft && (
+            <Step3Confirm
+              draft={draft}
+              sessionId={sessionId}
+              onDone={(est) => { setEstimate(est); setStep(4); }}
+            />
+          )}
+
+          {step === 4 && sessionId && estimate && (
+            <Step4Estimate
+              estimate={estimate}
+              sessionId={sessionId}
+              onRestart={restart}
+            />
+          )}
+        </>
       )}
     </div>
   );
