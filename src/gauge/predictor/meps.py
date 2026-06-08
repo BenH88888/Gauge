@@ -211,19 +211,42 @@ def load_meps(
     col_famid = _pick_column(df, "famid")
     col_totexp = _pick_column(df, "totexp")
 
-    keep = [col_age, col_sex, col_region, col_bmi, col_smoker, col_famid, col_totexp]
+    # Build a composite family key BEFORE narrowing to the keep columns.
+    # FAMID is scoped to a dwelling unit — the same letter ('A', 'B', ...) reappears
+    # across all ~28 000 households, so grouping on FAMID alone merges unrelated
+    # families and produces child counts in the thousands.  Prefixing with DUID
+    # (the dwelling-unit identifier, always present in MEPS HC files) gives a key
+    # that is unique across the full dataset.
+    _duid_col = "DUID" if "DUID" in df.columns else None
+    if _duid_col:
+        df["_famkey"] = df[_duid_col].astype(str) + "_" + df[col_famid].astype(str)
+    else:
+        # DUID absent in this file — fall back to FAMID alone and warn.
+        import warnings
+        warnings.warn(
+            "MEPS file has no 'DUID' column; counting children per FAMID alone. "
+            "Child counts may be inflated. Check your MEPS file version.",
+            stacklevel=2,
+        )
+        df["_famkey"] = df[col_famid].astype(str)
+
+    keep = [col_age, col_sex, col_region, col_bmi, col_smoker, col_totexp, "_famkey"]
     df = df[keep].copy()
 
     # MEPS uses negative integers as missing-value markers. Null them.
     for col in [col_age, col_sex, col_region, col_bmi, col_smoker]:
         df.loc[df[col] < 0, col] = pd.NA
 
-    # Count children under 18 per family identifier. Done before the
-    # adult-only filter so child rows contribute to their family's count.
+    # Count children under 18 per composite (DUID, FAMID) key.  Done before
+    # the adult-only filter so child rows contribute to their family's count.
+    # Cap at 5 to match the feature schema and clip outliers from large households.
     kids_per_family = (
-        df.loc[df[col_age].fillna(99) < 18, [col_famid]].assign(_n=1).groupby(col_famid)["_n"].sum()
+        df.loc[df[col_age].fillna(99) < 18, ["_famkey"]]
+        .assign(_n=1)
+        .groupby("_famkey")["_n"]
+        .sum()
     )
-    df["_children"] = df[col_famid].map(kids_per_family).fillna(0).astype(int)
+    df["_children"] = df["_famkey"].map(kids_per_family).fillna(0).clip(upper=5).astype(int)
 
     df = df[df[col_age] >= 18].copy()
 
@@ -235,7 +258,7 @@ def load_meps(
     df["region"] = df[col_region].astype(int).map(MEPS_REGION_MAP)
     df["bmi"] = df[col_bmi].astype(float)
     df["smoker"] = df[col_smoker].astype(int).map(MEPS_SMOKER_MAP)
-    df["children"] = df["_children"].clip(lower=0)
+    df["children"] = df["_children"]
     df["charges"] = df[col_totexp].astype(float).clip(lower=0)
 
     df = df.dropna(subset=["sex", "region", "smoker"]).copy()

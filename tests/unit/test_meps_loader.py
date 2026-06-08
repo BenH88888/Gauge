@@ -4,6 +4,10 @@ We don't ship the real MEPS file, so the tests synthesize a tiny
 MEPS-shaped Stata file in-memory and verify the loader handles the
 quirks (negative missing-value codes, adult-only filter, family-size
 to children count, region/sex/smoker code mapping).
+
+All fixtures include a ``DUID`` column so the tests exercise the
+composite ``(DUID, FAMID)`` child-counting code path rather than the
+fallback that warns about absent DUID.
 """
 
 from __future__ import annotations
@@ -27,11 +31,15 @@ pytestmark = pytest.mark.unit
 
 
 def _write_meps_fixture(rows: list[dict], path) -> None:
-    """Write a MEPS-shaped DataFrame to disk as a .dta file."""
+    """Write a MEPS-shaped DataFrame to disk as a ``.dta`` file.
+
+    Every row must include a ``DUID`` (dwelling-unit identifier) and the
+    standard MEPS column aliases imported from ``gauge.predictor.meps``.
+    """
     df = pd.DataFrame(rows)
-    # Stata requires explicit dtypes; cast numeric columns to int/float.
     df = df.astype(
         {
+            "DUID": "string",
             MEPS_AGE: np.int32,
             MEPS_SEX: np.int32,
             MEPS_REGION: np.int32,
@@ -45,42 +53,50 @@ def _write_meps_fixture(rows: list[dict], path) -> None:
 
 
 def test_load_meps_maps_codes_to_schema(tmp_path) -> None:
+    """Codes are mapped to schema strings; child count uses composite DUID+FAMID key."""
     rows = [
-        # Two adults in one family with one kid; one adult in another family.
+        # Two adults in household d1, family f1, with one child in f1.
         {
+            "DUID": "d1",
             MEPS_AGE: 40,
             MEPS_SEX: 1,
             MEPS_REGION: 1,
             MEPS_BMI: 27.5,
             MEPS_SMOKER: 2,
-            MEPS_FAMID: "f1",
+            MEPS_FAMID: "A",
             MEPS_TOTEXP: 5400.0,
         },
         {
+            "DUID": "d1",
             MEPS_AGE: 38,
             MEPS_SEX: 2,
             MEPS_REGION: 1,
             MEPS_BMI: 30.0,
             MEPS_SMOKER: 1,
-            MEPS_FAMID: "f1",
+            MEPS_FAMID: "A",
             MEPS_TOTEXP: 12000.0,
         },
         {
+            "DUID": "d1",
             MEPS_AGE: 8,
             MEPS_SEX: 1,
             MEPS_REGION: 1,
             MEPS_BMI: -1.0,
             MEPS_SMOKER: -1,
-            MEPS_FAMID: "f1",
+            MEPS_FAMID: "A",
             MEPS_TOTEXP: 1200.0,
         },
+        # Single adult in a different household — same FAMID letter 'A', different DUID.
+        # Without the DUID prefix this row would (incorrectly) share the child count
+        # from d1's family A.
         {
+            "DUID": "d2",
             MEPS_AGE: 55,
             MEPS_SEX: 1,
             MEPS_REGION: 4,
             MEPS_BMI: 32.0,
             MEPS_SMOKER: 2,
-            MEPS_FAMID: "f2",
+            MEPS_FAMID: "A",
             MEPS_TOTEXP: 9800.0,
         },
     ]
@@ -99,50 +115,56 @@ def test_load_meps_maps_codes_to_schema(tmp_path) -> None:
     ]
     assert len(df) == 3  # the child row was filtered out
     assert set(df["sex"].unique()) <= {"male", "female"}
-    assert set(df["region"].unique()) <= {
-        "northeast",
-        "midwest",
-        "south",
-        "west",
-    }
+    assert set(df["region"].unique()) <= {"northeast", "midwest", "south", "west"}
     assert set(df["smoker"].unique()) <= {"yes", "no"}
-    # Adults in family f1 should have children=1 (one kid in their family).
-    f1 = df[df["age"].isin([38, 40])]
-    assert (f1["children"] == 1).all()
-    # Adult in family f2 has no kids.
-    assert (df.loc[df["age"] == 55, "children"] == 0).all()
+
+    # Adults in household d1, family A, should see one child (the 8-year-old).
+    d1_adults = df[df["age"].isin([38, 40])]
+    assert (d1_adults["children"] == 1).all(), (
+        "Adults sharing DUID+FAMID with a child should have children=1"
+    )
+
+    # Adult in household d2, family A, shares the FAMID letter but not the DUID.
+    # Their child count must be 0, not 1.
+    d2_adult = df[df["age"] == 55]
+    assert (d2_adult["children"] == 0).all(), (
+        "Adult in a different household (DUID) must not inherit another household's children"
+    )
 
 
 def test_load_meps_drops_rows_with_missing_required(tmp_path) -> None:
     rows = [
         # Valid adult.
         {
+            "DUID": "d1",
             MEPS_AGE: 30,
             MEPS_SEX: 2,
             MEPS_REGION: 2,
             MEPS_BMI: 25.0,
             MEPS_SMOKER: 2,
-            MEPS_FAMID: "a",
+            MEPS_FAMID: "A",
             MEPS_TOTEXP: 2000.0,
         },
         # Adult with missing BMI: should be dropped.
         {
+            "DUID": "d2",
             MEPS_AGE: 45,
             MEPS_SEX: 1,
             MEPS_REGION: 2,
             MEPS_BMI: -7.0,
             MEPS_SMOKER: 2,
-            MEPS_FAMID: "b",
+            MEPS_FAMID: "A",
             MEPS_TOTEXP: 3000.0,
         },
         # Adult with missing smoker: should be dropped.
         {
+            "DUID": "d3",
             MEPS_AGE: 50,
             MEPS_SEX: 1,
             MEPS_REGION: 3,
             MEPS_BMI: 27.0,
             MEPS_SMOKER: -9,
-            MEPS_FAMID: "c",
+            MEPS_FAMID: "A",
             MEPS_TOTEXP: 4500.0,
         },
     ]
@@ -158,12 +180,13 @@ def test_load_meps_clamps_negative_charges_to_zero(tmp_path) -> None:
     """Defensive: a negative TOTEXP value (shouldn't happen in MEPS) is clamped."""
     rows = [
         {
+            "DUID": "d1",
             MEPS_AGE: 35,
             MEPS_SEX: 1,
             MEPS_REGION: 1,
             MEPS_BMI: 26.0,
             MEPS_SMOKER: 2,
-            MEPS_FAMID: "x",
+            MEPS_FAMID: "A",
             MEPS_TOTEXP: -100.0,
         },
     ]
@@ -185,21 +208,22 @@ def test_load_meps_errors_on_missing_columns(tmp_path) -> None:
 
 def test_missing_bmi_without_saq_gives_actionable_error(tmp_path) -> None:
     """When BMI is absent and no SAQ is supplied, the error names the fix."""
-    # Build a MEPS-like file with everything EXCEPT a BMI column.
     rows = pd.DataFrame(
         [
             {
                 "DUPERSID": "p1",
+                "DUID": "d1",
                 MEPS_AGE: 35,
                 MEPS_SEX: 1,
                 MEPS_REGION: 1,
                 MEPS_SMOKER: 2,
-                MEPS_FAMID: "f1",
+                MEPS_FAMID: "A",
                 MEPS_TOTEXP: 4000.0,
             }
         ]
     ).astype(
         {
+            "DUID": "string",
             MEPS_AGE: np.int32,
             MEPS_SEX: np.int32,
             MEPS_REGION: np.int32,
@@ -223,21 +247,22 @@ def test_load_meps_bad_path_raises_value_error(tmp_path) -> None:
 
 def test_load_meps_bad_saq_path_raises_value_error(tmp_path) -> None:
     """A bad SAQ path raises a ValueError that names the SAQ file."""
-    # Build a valid main file (no BMI column so we need SAQ).
     main_rows = pd.DataFrame(
         [
             {
                 "DUPERSID": "p1",
+                "DUID": "d1",
                 MEPS_AGE: 40,
                 MEPS_SEX: 1,
                 MEPS_REGION: 1,
                 MEPS_SMOKER: 2,
-                MEPS_FAMID: "f1",
+                MEPS_FAMID: "A",
                 MEPS_TOTEXP: 5000.0,
             }
         ]
     ).astype(
         {
+            "DUID": "string",
             MEPS_AGE: np.int32,
             MEPS_SEX: np.int32,
             MEPS_REGION: np.int32,
@@ -260,16 +285,18 @@ def test_load_meps_saq_missing_dupersid_raises_value_error(tmp_path) -> None:
         [
             {
                 "DUPERSID": "p1",
+                "DUID": "d1",
                 MEPS_AGE: 40,
                 MEPS_SEX: 1,
                 MEPS_REGION: 1,
                 MEPS_SMOKER: 2,
-                MEPS_FAMID: "f1",
+                MEPS_FAMID: "A",
                 MEPS_TOTEXP: 5000.0,
             }
         ]
     ).astype(
         {
+            "DUID": "string",
             MEPS_AGE: np.int32,
             MEPS_SEX: np.int32,
             MEPS_REGION: np.int32,
@@ -296,16 +323,18 @@ def test_load_meps_saq_with_no_bmi_columns_raises_value_error(tmp_path) -> None:
         [
             {
                 "DUPERSID": "p1",
+                "DUID": "d1",
                 MEPS_AGE: 40,
                 MEPS_SEX: 1,
                 MEPS_REGION: 1,
                 MEPS_SMOKER: 2,
-                MEPS_FAMID: "f1",
+                MEPS_FAMID: "A",
                 MEPS_TOTEXP: 5000.0,
             }
         ]
     ).astype(
         {
+            "DUID": "string",
             MEPS_AGE: np.int32,
             MEPS_SEX: np.int32,
             MEPS_REGION: np.int32,
@@ -314,7 +343,6 @@ def test_load_meps_saq_with_no_bmi_columns_raises_value_error(tmp_path) -> None:
             MEPS_TOTEXP: np.float64,
         }
     )
-    # SAQ has DUPERSID but no BMI column.
     saq_rows = pd.DataFrame([{"DUPERSID": "p1", "UNRELATED_COL": 42.0}]).astype(
         {"UNRELATED_COL": np.float64}
     )
@@ -334,25 +362,28 @@ def test_saq_merge_supplies_bmi(tmp_path) -> None:
         [
             {
                 "DUPERSID": "p1",
+                "DUID": "d1",
                 MEPS_AGE: 40,
                 MEPS_SEX: 1,
                 MEPS_REGION: 1,
                 MEPS_SMOKER: 2,
-                MEPS_FAMID: "f1",
+                MEPS_FAMID: "A",
                 MEPS_TOTEXP: 5500.0,
             },
             {
                 "DUPERSID": "p2",
+                "DUID": "d2",
                 MEPS_AGE: 50,
                 MEPS_SEX: 2,
                 MEPS_REGION: 2,
                 MEPS_SMOKER: 1,
-                MEPS_FAMID: "f2",
+                MEPS_FAMID: "A",
                 MEPS_TOTEXP: 9000.0,
             },
         ]
     ).astype(
         {
+            "DUID": "string",
             MEPS_AGE: np.int32,
             MEPS_SEX: np.int32,
             MEPS_REGION: np.int32,
