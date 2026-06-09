@@ -10,6 +10,7 @@ from gauge.docchat.extractor import extract_pages
 from gauge.docchat.llm import EchoLLM, LLMClient
 from gauge.docchat.schemas import (
     ChatResponse,
+    ChatTurn,
     Citation,
     DocumentMeta,
 )
@@ -87,7 +88,13 @@ class DocumentChatService:
         self.store.add(meta, chunks)
         return meta
 
-    def ask(self, document_id: str, question: str, top_k: int = 4) -> ChatResponse:
+    def ask(
+        self,
+        document_id: str,
+        question: str,
+        history: list[ChatTurn] | None = None,
+        top_k: int = 4,
+    ) -> ChatResponse:
         """Answer a question against a previously uploaded document.
 
         Parameters
@@ -96,6 +103,9 @@ class DocumentChatService:
             Identifier returned by :meth:`upload_pdf`.
         question : str
             Free-text question from the user.
+        history : list[ChatTurn] or None, optional
+            Prior turns in the conversation (oldest first). Passed to the LLM
+            so it can give contextually coherent follow-up answers.
         top_k : int, optional
             Number of chunks to retrieve and pass to the LLM. Default is 4.
 
@@ -115,7 +125,7 @@ class DocumentChatService:
 
         results = stored.index.search(question, k=top_k)
         contexts = [chunk for chunk, _ in results]
-        answer = self.llm.answer(question, contexts)
+        answer = self.llm.answer(question, contexts, history=history or [])
         citations = [
             Citation(
                 document_id=chunk.document_id,

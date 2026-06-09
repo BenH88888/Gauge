@@ -47,11 +47,28 @@ class Citation(BaseModel):
     snippet: str = Field(description="Short excerpt for display.")
 
 
+class ChatTurn(BaseModel):
+    """A single completed exchange in a conversation.
+
+    Used to pass prior turns to the LLM so answers are contextually aware
+    of what has already been asked and answered in the session.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    question: str
+    answer: str
+
+
 class ChatRequest(BaseModel):
     """POST /chat body."""
 
     document_id: str
     question: str = Field(min_length=1, max_length=2_000)
+    history: list[ChatTurn] = Field(
+        default_factory=list,
+        description="Prior turns in this conversation, oldest first.",
+    )
     top_k: int = Field(default=4, ge=1, le=20)
 
 

@@ -14,6 +14,34 @@
 const BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 
 // ---------------------------------------------------------------------------
+// Anonymous user identity
+// ---------------------------------------------------------------------------
+
+/**
+ * Return the persistent anonymous user ID for this browser, creating one
+ * on the first call and storing it in localStorage under `gauge_user_id`.
+ *
+ * The ID is an opaque UUID sent as `X-Gauge-User-Id` on every request so
+ * the backend can scope saved estimates to this browser without requiring
+ * a login.  It is not a security credential — it only prevents one user
+ * from accidentally seeing another's estimates.
+ */
+function getOrCreateUserId(): string {
+  const STORAGE_KEY = "gauge_user_id";
+  let id = localStorage.getItem(STORAGE_KEY);
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem(STORAGE_KEY, id);
+  }
+  return id;
+}
+
+/** Headers included on every request to identify this browser session. */
+function authHeaders(): Record<string, string> {
+  return { "X-Gauge-User-Id": getOrCreateUserId() };
+}
+
+// ---------------------------------------------------------------------------
 // Shared primitive types
 // ---------------------------------------------------------------------------
 
@@ -107,6 +135,36 @@ export interface ChatResponse {
   llm_used: string;
 }
 
+/** A single completed question/answer exchange, sent back as context on follow-ups. */
+export interface ChatTurn {
+  question: string;
+  answer: string;
+}
+
+// ---------------------------------------------------------------------------
+// Saved estimate types
+// ---------------------------------------------------------------------------
+
+/** A named snapshot of an estimate the user has saved. */
+export interface SavedEstimate {
+  id: string;
+  label: string;
+  features: PredictionFeatures;
+  plan: Plan | null;
+  prediction: CostPrediction;
+  oop_interval: OopInterval | null;
+  created_at: string;
+}
+
+export interface SaveEstimateRequest {
+  session_id: string;
+  label: string;
+}
+
+export interface RenameEstimateRequest {
+  label: string;
+}
+
 // ---------------------------------------------------------------------------
 // Session / guided-flow types
 // ---------------------------------------------------------------------------
@@ -167,7 +225,7 @@ export interface ConfirmPlanRequest {
 async function postJSON<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -230,7 +288,7 @@ export async function attachSessionDocument(
   form.append("file", file);
   const res = await fetch(
     `${BASE}/sessions/${encodeURIComponent(sessionId)}/document`,
-    { method: "POST", body: form },
+    { method: "POST", headers: authHeaders(), body: form },
   );
   if (!res.ok) {
     const detail = await res.text();
@@ -281,16 +339,67 @@ export function sessionWhatIf(
  *
  * @param sessionId - Target session (must have an attached document).
  * @param question - Free-text question from the user.
+ * @param history - Prior turns in this conversation (oldest first) so the LLM
+ *   can give contextually coherent follow-up answers.
  * @param topK - Number of chunks to retrieve for context. Defaults to 4.
  * @returns Answer text and page-level citations.
  */
 export function sessionChat(
   sessionId: string,
   question: string,
+  history: ChatTurn[] = [],
   topK = 4,
 ): Promise<ChatResponse> {
   return postJSON<ChatResponse>(
     `/sessions/${encodeURIComponent(sessionId)}/chat`,
-    { question, top_k: topK },
+    { question, history, top_k: topK },
   );
+}
+
+// ---------------------------------------------------------------------------
+// Saved estimates API
+// ---------------------------------------------------------------------------
+
+/** Save the current session's estimate under a user-supplied label. */
+export function saveEstimate(req: SaveEstimateRequest): Promise<SavedEstimate> {
+  return postJSON<SavedEstimate>("/saved-estimates", req);
+}
+
+/** List all saved estimates owned by this browser session, newest first. */
+export async function listSavedEstimates(): Promise<SavedEstimate[]> {
+  const res = await fetch(`${BASE}/saved-estimates`, { headers: authHeaders() });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`${res.status} ${res.statusText}: ${detail}`);
+  }
+  return res.json() as Promise<SavedEstimate[]>;
+}
+
+/** Rename a saved estimate owned by this browser session. */
+export async function renameSavedEstimate(
+  id: string,
+  req: RenameEstimateRequest,
+): Promise<SavedEstimate> {
+  const res = await fetch(`${BASE}/saved-estimates/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`${res.status} ${res.statusText}: ${detail}`);
+  }
+  return res.json() as Promise<SavedEstimate>;
+}
+
+/** Delete a saved estimate owned by this browser session. */
+export async function deleteSavedEstimate(id: string): Promise<void> {
+  const res = await fetch(`${BASE}/saved-estimates/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`${res.status} ${res.statusText}: ${detail}`);
+  }
 }

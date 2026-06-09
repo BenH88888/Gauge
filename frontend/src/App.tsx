@@ -1,16 +1,13 @@
 /**
  * App — root component for Gauge.
  *
- * Renders a persistent brand header and footer around the single guided
- * intake flow.  There is intentionally no top-level navigation: the product
- * answers one question ("what will I actually pay?"), so every screen is a
- * step in that answer, not a separate feature.
- *
- * The what-if simulator and plan Q&A panel are embedded inside the final step
- * of IntakeWizard — they appear in context, after the estimate, not behind
- * separate tabs.
+ * Renders a persistent brand header and footer. The header includes a "How it
+ * works" nav link that toggles between the intake wizard and the blog page.
+ * No router dependency — a single boolean state is enough for two views.
  */
 
+import { useState } from "react";
+import Blog from "./components/Blog";
 import { IntakeWizard } from "./components/IntakeWizard";
 
 /** Shield-plus brand mark used in the header. */
@@ -43,25 +40,41 @@ function BrandIcon() {
 }
 
 export default function App() {
+  const [showBlog, setShowBlog] = useState(false);
+
   return (
     <div className="min-h-screen">
       {/* Brand header */}
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-6 py-5">
-          <BrandIcon />
-          <div>
-            <h1 className="text-lg font-semibold leading-none tracking-tight text-slate-900">
-              Gauge
-            </h1>
-            <p className="mt-0.5 text-xs text-slate-500">
-              What will you actually pay this year?
-            </p>
-          </div>
+          {/* Logo + wordmark — clicking always returns to the tool */}
+          <button
+            onClick={() => setShowBlog(false)}
+            className="flex items-center gap-3 focus:outline-none"
+            aria-label="Go to Gauge home"
+          >
+            <BrandIcon />
+            <div className="text-left">
+              <p className="text-lg font-semibold leading-none tracking-tight text-slate-900">
+                Gauge
+              </p>
+            </div>
+          </button>
+
+          {/* Nav */}
+          <nav className="ml-auto flex items-center gap-1">
+            <NavLink active={!showBlog} onClick={() => setShowBlog(false)}>
+              Estimator
+            </NavLink>
+            <NavLink active={showBlog} onClick={() => setShowBlog(true)}>
+              How it works
+            </NavLink>
+          </nav>
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-6 py-8">
-        <IntakeWizard />
+      <main className={showBlog ? "" : "mx-auto max-w-5xl px-6 py-8"}>
+        {showBlog ? <Blog /> : <IntakeWizard />}
       </main>
 
       <footer className="mx-auto max-w-5xl px-6 pb-8">
@@ -71,5 +84,29 @@ export default function App() {
         </p>
       </footer>
     </div>
+  );
+}
+
+function NavLink({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={[
+        "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+        active
+          ? "bg-brand-50 text-brand-700"
+          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+      ].join(" ")}
+    >
+      {children}
+    </button>
   );
 }

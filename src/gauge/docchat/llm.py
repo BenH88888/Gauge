@@ -16,7 +16,7 @@ from __future__ import annotations
 import os
 from typing import Protocol
 
-from gauge.docchat.schemas import Chunk
+from gauge.docchat.schemas import ChatTurn, Chunk
 
 SYSTEM_PROMPT = (
     "You are a careful assistant answering questions about a US health "
@@ -35,15 +35,22 @@ class LLMClient(Protocol):
         """Identifier reported to the client for observability."""
         ...
 
-    def answer(self, question: str, contexts: list[Chunk]) -> str:
+    def answer(
+        self,
+        question: str,
+        contexts: list[Chunk],
+        history: list[ChatTurn] | None = None,
+    ) -> str:
         """Return a plain-text answer grounded in the supplied chunks.
 
         Parameters
         ----------
         question : str
-            The user's question.
+            The user's current question.
         contexts : list[Chunk]
             Retrieved chunks from the retrieval index.
+        history : list[ChatTurn] or None, optional
+            Prior conversation turns (oldest first) for context continuity.
 
         Returns
         -------
@@ -62,8 +69,17 @@ class EchoLLM:
 
     name = "echo"
 
-    def answer(self, question: str, contexts: list[Chunk]) -> str:
+    def answer(
+        self,
+        question: str,
+        contexts: list[Chunk],
+        history: list[ChatTurn] | None = None,
+    ) -> str:
         """Format retrieved chunks as a plain-English response.
+
+        History is accepted but ignored — EchoLLM has no language model to
+        synthesise a contextual answer, so it simply returns the retrieved
+        passages verbatim.
 
         Parameters
         ----------
@@ -71,6 +87,8 @@ class EchoLLM:
             The user's question.
         contexts : list[Chunk]
             Retrieved chunks from the retrieval index.
+        history : list[ChatTurn] or None, optional
+            Ignored by this implementation.
 
         Returns
         -------
@@ -134,15 +152,26 @@ class AnthropicLLM:
         self._client = Anthropic()
         self._model = model
 
-    def answer(self, question: str, contexts: list[Chunk]) -> str:
+    def answer(
+        self,
+        question: str,
+        contexts: list[Chunk],
+        history: list[ChatTurn] | None = None,
+    ) -> str:
         """Answer a question using the Anthropic Messages API.
+
+        Prior conversation turns are injected as alternating user/assistant
+        messages before the current question so the model can refer back to
+        what was already discussed.
 
         Parameters
         ----------
         question : str
-            The user's question.
+            The user's current question.
         contexts : list[Chunk]
             Retrieved chunks to ground the answer in.
+        history : list[ChatTurn] or None, optional
+            Prior conversation turns, oldest first.
 
         Returns
         -------
@@ -156,20 +185,24 @@ class AnthropicLLM:
             f"[Excerpt {i + 1}, page(s) {', '.join(str(p) for p in c.page_numbers)}]\n{c.text}"
             for i, c in enumerate(contexts)
         )
+        messages: list[dict[str, str]] = []
+        for turn in history or []:
+            messages.append({"role": "user", "content": turn.question})
+            messages.append({"role": "assistant", "content": turn.answer})
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    f"Question: {question}\n\nExcerpts from the plan document:\n{context_block}"
+                ),
+            }
+        )
         response = self._client.messages.create(
             model=self._model,
             max_tokens=600,
             system=SYSTEM_PROMPT,
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        f"Question: {question}\n\nExcerpts from the plan document:\n{context_block}"
-                    ),
-                }
-            ],
+            messages=messages,
         )
-        # The response.content is a list of content blocks; take the text.
         parts = [block.text for block in response.content if hasattr(block, "text")]
         return "".join(parts).strip()
 
@@ -204,15 +237,26 @@ class OpenAILLM:
         self._client = OpenAI()
         self._model = model
 
-    def answer(self, question: str, contexts: list[Chunk]) -> str:
+    def answer(
+        self,
+        question: str,
+        contexts: list[Chunk],
+        history: list[ChatTurn] | None = None,
+    ) -> str:
         """Answer a question using the OpenAI Chat Completions API.
+
+        Prior conversation turns are injected as alternating user/assistant
+        messages before the current question so the model can refer back to
+        what was already discussed.
 
         Parameters
         ----------
         question : str
-            The user's question.
+            The user's current question.
         contexts : list[Chunk]
             Retrieved chunks to ground the answer in.
+        history : list[ChatTurn] or None, optional
+            Prior conversation turns, oldest first.
 
         Returns
         -------
@@ -226,18 +270,22 @@ class OpenAILLM:
             f"[Excerpt {i + 1}, page(s) {', '.join(str(p) for p in c.page_numbers)}]\n{c.text}"
             for i, c in enumerate(contexts)
         )
+        messages: list[dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+        for turn in history or []:
+            messages.append({"role": "user", "content": turn.question})
+            messages.append({"role": "assistant", "content": turn.answer})
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    f"Question: {question}\n\nExcerpts from the plan document:\n{context_block}"
+                ),
+            }
+        )
         response = self._client.chat.completions.create(
             model=self._model,
             max_tokens=600,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": (
-                        f"Question: {question}\n\nExcerpts from the plan document:\n{context_block}"
-                    ),
-                },
-            ],
+            messages=messages,
         )
         return (response.choices[0].message.content or "").strip()
 

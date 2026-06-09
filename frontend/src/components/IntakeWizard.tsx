@@ -14,11 +14,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ChatTurn,
   ConfirmPlanRequest,
   CreateSessionResponse,
   OopInterval,
   PlanDraft,
   Region,
+  SavedEstimate,
   SessionEstimate,
   Sex,
   Smoker,
@@ -28,6 +30,10 @@ import {
   centsToDollars,
   confirmSessionPlan,
   createSession,
+  deleteSavedEstimate,
+  listSavedEstimates,
+  renameSavedEstimate,
+  saveEstimate,
   sessionChat,
   sessionWhatIf,
 } from "../api";
@@ -41,8 +47,8 @@ import { WhatIfChart } from "./WhatIfChart";
 // Types
 // ---------------------------------------------------------------------------
 
-/** Which step of the wizard the user is currently on (0 = landing, 1–4 = intake). */
-type Step = 0 | 1 | 2 | 3 | 4;
+/** Which step of the wizard the user is currently on (0 = landing, 1–4 = intake, 5 = loaded saved estimate). */
+type Step = 0 | 1 | 2 | 3 | 4 | 5;
 
 const REGIONS: Region[] = ["northeast", "midwest", "south", "west"];
 
@@ -78,8 +84,15 @@ function sweepValuesFor(feature: SweepFeature): Array<number | string> {
  * plain language, then hands off to the intake wizard on "Get started".
  *
  * @param onStart - Called when the user clicks the CTA.
+ * @param onLoad - Called when the user loads a saved estimate.
  */
-function Step0Landing({ onStart }: { onStart: () => void }) {
+function Step0Landing({
+  onStart,
+  onLoad,
+}: {
+  onStart: () => void;
+  onLoad: (est: SavedEstimate) => void;
+}) {
   const steps = [
     {
       icon: "👤",
@@ -150,6 +163,153 @@ function Step0Landing({ onStart }: { onStart: () => void }) {
         Illustrative prototype — not a substitute for an actual insurance quote
         or advice from your insurer.
       </p>
+
+      <SavedEstimatesPanel onLoad={onLoad} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Saved estimates panel (used on landing screen)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetches and displays all saved estimates with inline rename and delete.
+ * Shown on the landing screen so returning users can see their history.
+ *
+ * @param onLoad - Called when the user clicks "Load" on a saved estimate,
+ *   transitioning them straight to the estimate view.
+ */
+function SavedEstimatesPanel({
+  onLoad,
+}: {
+  onLoad: (est: SavedEstimate) => void;
+}) {
+  const [estimates, setEstimates] = useState<SavedEstimate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editLabel, setEditLabel] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    listSavedEstimates()
+      .then(setEstimates)
+      .catch((e) => setError(String(e)))
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function handleDelete(id: string) {
+    try {
+      await deleteSavedEstimate(id);
+      setEstimates((prev) => prev.filter((e) => e.id !== id));
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  async function handleRename(id: string) {
+    if (!editLabel.trim()) return;
+    try {
+      const updated = await renameSavedEstimate(id, { label: editLabel.trim() });
+      setEstimates((prev) => prev.map((e) => (e.id === id ? updated : e)));
+      setEditingId(null);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  if (loading) return null;
+  if (estimates.length === 0) return null;
+
+  return (
+    <div className="mt-12 w-full max-w-3xl">
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+        Saved estimates
+      </h2>
+
+      {error && (
+        <div className="mb-3 rounded bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>
+      )}
+
+      <div className="space-y-2">
+        {estimates.map((est) => (
+          <div
+            key={est.id}
+            className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm"
+          >
+            {/* Label / rename */}
+            <div className="min-w-0 flex-1">
+              {editingId === est.id ? (
+                <div className="flex gap-2">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={editLabel}
+                    onChange={(e) => setEditLabel(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void handleRename(est.id);
+                      if (e.key === "Escape") setEditingId(null);
+                    }}
+                    className="flex-1 rounded-md border border-slate-300 px-2 py-1 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleRename(est.id)}
+                    className="text-xs font-semibold text-brand-600 hover:text-brand-800"
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingId(null)}
+                    className="text-xs text-slate-400 hover:text-slate-600"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <p className="truncate text-sm font-medium text-slate-900">{est.label}</p>
+                  <p className="text-xs text-slate-500">
+                    {est.oop_interval
+                      ? `${centsToDollars(est.oop_interval.lower_cents)}–${centsToDollars(est.oop_interval.upper_cents)} OOP`
+                      : centsToDollars(est.prediction.median_charges_cents) + " charges"}
+                    {" · "}
+                    {new Date(est.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            {editingId !== est.id && (
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onLoad(est)}
+                  className="rounded-md bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
+                >
+                  Load
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setEditingId(est.id); setEditLabel(est.label); }}
+                  className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  Rename
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleDelete(est.id)}
+                  className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-400 hover:bg-red-50 hover:text-red-600"
+                >
+                  Delete
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -424,6 +584,49 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 /**
+ * Labelled dollar-amount input for a required plan field.
+ *
+ * Defined at module scope so React does not treat it as a new component type
+ * on every render (which would unmount and remount the input, killing focus).
+ */
+function DollarField({
+  label,
+  value,
+  onChange,
+  missing,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  missing: boolean;
+}) {
+  return (
+    <label className="flex flex-col gap-1 text-sm">
+      <span className="font-medium text-slate-700">
+        {label}{" "}
+        {missing && (
+          <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-700">
+            not found
+          </span>
+        )}
+      </span>
+      <div className="flex items-center rounded-md border border-slate-300 bg-white px-3 py-1.5">
+        <span className="mr-1 text-slate-400">$</span>
+        <input
+          type="number"
+          min={0}
+          step={1}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="flex-1 border-none bg-transparent text-slate-900 outline-none"
+          placeholder="0"
+        />
+      </div>
+    </label>
+  );
+}
+
+/**
  * Shows the auto-extracted plan fields and lets the user correct any values
  * before confirming.  Fields that could not be extracted are shown as empty
  * inputs with a "not found" badge.
@@ -498,44 +701,6 @@ function Step3Confirm({
     } finally {
       setLoading(false);
     }
-  }
-
-  /** Renders a labelled dollar-amount input for a required plan field. */
-  function DollarField({
-    label,
-    value,
-    onChange,
-    missing,
-  }: {
-    label: string;
-    value: string;
-    onChange: (v: string) => void;
-    missing: boolean;
-  }) {
-    return (
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium text-slate-700">
-          {label}{" "}
-          {missing && (
-            <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-700">
-              not found
-            </span>
-          )}
-        </span>
-        <div className="flex items-center rounded-md border border-slate-300 bg-white px-3 py-1.5">
-          <span className="mr-1 text-slate-400">$</span>
-          <input
-            type="number"
-            min={0}
-            step={1}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className="flex-1 border-none bg-transparent text-slate-900 outline-none"
-            placeholder="0"
-          />
-        </div>
-      </label>
-    );
   }
 
   const unresolved = new Set(draft.unresolved_fields);
@@ -765,6 +930,13 @@ function Step4Estimate({
   const [chatError, setChatError] = useState<string | null>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
+  // Save state
+  const [saveLabel, setSaveLabel] = useState("");
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [savedConfirm, setSavedConfirm] = useState(false);
+
   // Fire what-if whenever the sweep feature changes
   useEffect(() => {
     let cancelled = false;
@@ -789,12 +961,18 @@ function Step4Estimate({
     if (!question.trim() || !document_id) return;
     setChatLoading(true);
     setChatError(null);
+    const currentQuestion = question.trim();
+    // Build history from prior messages for context continuity
+    const history: ChatTurn[] = chatMessages.map((m) => ({
+      question: m.question,
+      answer: m.answer,
+    }));
     try {
-      const resp = await sessionChat(sessionId, question.trim());
+      const resp = await sessionChat(sessionId, currentQuestion, history);
       setChatMessages((prev) => [
         ...prev,
         {
-          question: question.trim(),
+          question: currentQuestion,
           answer: resp.answer,
           pages: resp.citations.flatMap((c) => c.page_numbers),
         },
@@ -807,11 +985,28 @@ function Step4Estimate({
     }
   }
 
+  async function handleSave() {
+    if (!saveLabel.trim()) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await saveEstimate({ session_id: sessionId, label: saveLabel.trim() });
+      setSavedConfirm(true);
+      setSaveOpen(false);
+      setSaveLabel("");
+      setTimeout(() => setSavedConfirm(false), 3000);
+    } catch (e) {
+      setSaveError(String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* Page header */}
-      <div className="flex items-start justify-between">
-        <div>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
           <h2 className="text-xl font-semibold text-slate-900">Your estimate</h2>
           {plan && (
             <p className="mt-1 text-sm text-slate-600">
@@ -822,13 +1017,62 @@ function Step4Estimate({
             </p>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onRestart}
-          className="text-xs text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline"
-        >
-          Start over
-        </button>
+
+        <div className="flex shrink-0 items-center gap-3">
+          {/* Save estimate */}
+          {savedConfirm ? (
+            <span className="text-xs font-medium text-emerald-600">Saved ✓</span>
+          ) : saveOpen ? (
+            <div className="flex items-center gap-2">
+              <input
+                autoFocus
+                type="text"
+                value={saveLabel}
+                onChange={(e) => setSaveLabel(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void handleSave();
+                  if (e.key === "Escape") setSaveOpen(false);
+                }}
+                placeholder="Label, e.g. Blue Shield Gold"
+                className="w-52 rounded-md border border-slate-300 px-2 py-1 text-xs outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+              />
+              <button
+                type="button"
+                onClick={() => void handleSave()}
+                disabled={saving || !saveLabel.trim()}
+                className="rounded-md bg-brand-600 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-40"
+              >
+                {saving ? "Saving…" : "Save"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSaveOpen(false)}
+                className="text-xs text-slate-400 hover:text-slate-600"
+              >
+                Cancel
+              </button>
+              {saveError && (
+                <span className="text-xs text-red-600">{saveError}</span>
+              )}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setSaveOpen(true)}
+              className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+            >
+              Save estimate
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={onRestart}
+            className="text-xs text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline"
+          >
+            Start over
+          </button>
+        </div>
       </div>
 
       {/* Two-column body */}
@@ -994,12 +1238,19 @@ export function IntakeWizard() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [draft, setDraft] = useState<PlanDraft | null>(null);
   const [estimate, setEstimate] = useState<SessionEstimate | null>(null);
+  const [loadedEstimate, setLoadedEstimate] = useState<SavedEstimate | null>(null);
 
   function restart() {
     setStep(0);
     setSessionId(null);
     setDraft(null);
     setEstimate(null);
+    setLoadedEstimate(null);
+  }
+
+  function handleLoad(saved: SavedEstimate) {
+    setLoadedEstimate(saved);
+    setStep(5);
   }
 
   /** Blank draft used when the user skips the PDF upload step. */
@@ -1015,10 +1266,55 @@ export function IntakeWizard() {
   return (
     <div>
       {/* Landing screen — no step bar */}
-      {step === 0 && <Step0Landing onStart={() => setStep(1)} />}
+      {step === 0 && <Step0Landing onStart={() => setStep(1)} onLoad={handleLoad} />}
+
+      {/* Loaded saved estimate — read-only view */}
+      {step === 5 && loadedEstimate && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-slate-900">{loadedEstimate.label}</h2>
+              {loadedEstimate.plan && (
+                <p className="mt-1 text-sm text-slate-600">
+                  {loadedEstimate.plan.name} · ${(loadedEstimate.plan.deductible_cents / 100).toLocaleString()} deductible,{" "}
+                  ${(loadedEstimate.plan.out_of_pocket_max_cents / 100).toLocaleString()} OOP max
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={restart}
+              className="text-xs text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline"
+            >
+              ← Back
+            </button>
+          </div>
+          <div className="overflow-hidden rounded-xl border border-slate-200 shadow-card">
+            <EstimateBlock
+              interval={loadedEstimate.oop_interval}
+              chargesCents={loadedEstimate.prediction.median_charges_cents}
+            />
+            <div className="border-t border-slate-200 bg-slate-50 px-6 py-3 text-xs text-slate-500">
+              80% charge interval:{" "}
+              <span className="tabular-nums font-medium text-slate-700">
+                {centsToDollars(loadedEstimate.prediction.lower_bound_cents)}
+              </span>{" "}
+              to{" "}
+              <span className="tabular-nums font-medium text-slate-700">
+                {centsToDollars(loadedEstimate.prediction.upper_bound_cents)}
+              </span>
+            </div>
+          </div>
+          <p className="text-xs text-slate-400">
+            Saved {new Date(loadedEstimate.created_at).toLocaleString()} · Age {loadedEstimate.features.age},{" "}
+            {loadedEstimate.features.smoker === "yes" ? "smoker" : "non-smoker"},{" "}
+            BMI {loadedEstimate.features.bmi}
+          </p>
+        </div>
+      )}
 
       {/* Intake wizard steps 1–4 */}
-      {step !== 0 && (
+      {step !== 0 && step !== 5 && (
         <>
           <StepBar
             current={step as 1 | 2 | 3 | 4}
@@ -1062,3 +1358,4 @@ export function IntakeWizard() {
     </div>
   );
 }
+

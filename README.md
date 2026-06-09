@@ -53,7 +53,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173`. Enter your demographics, upload your plan PDF, review the extracted fields, and get your personalised OOP interval. The what-if simulator and plan Q&A panel appear inline below the result — no separate tabs.
+Open `http://localhost:5173`. Enter your demographics, upload your plan PDF, review the extracted fields, and get your personalised OOP interval. The what-if simulator and plan Q&A panel appear inline below the result — no separate tabs. The **"How it works"** nav link opens a blog page explaining the project, architecture, and conformal prediction approach.
 
 The frontend talks to the backend at `http://localhost:8000`. Override with `VITE_API_BASE` at build time.
 
@@ -120,6 +120,19 @@ Sessions and uploaded documents persist to SQLite at `~/.cache/gauge/gauge.db` b
 | `POST` | `/sessions/{id}/whatif` | What-if sweep on session demographics |
 | `POST` | `/sessions/{id}/chat` | Plain-English Q&A against the session's plan document |
 
+## Saved estimates
+
+Completed estimates can be saved under a user-supplied label and retrieved across sessions. The browser generates a UUID on first visit, sent as `X-Gauge-User-Id` on every request — no login required, but estimates are scoped to your browser.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/saved-estimates` | Save current session estimate (plan must be confirmed) |
+| `GET` | `/saved-estimates` | List all saved estimates for this user, newest first |
+| `PATCH` | `/saved-estimates/{id}` | Rename a saved estimate |
+| `DELETE` | `/saved-estimates/{id}` | Delete a saved estimate |
+
+All four endpoints require the `X-Gauge-User-Id` header (422 if absent). `PATCH` and `DELETE` return 403 if the requesting user does not own the estimate.
+
 ## Running the tests
 
 ```bash
@@ -129,7 +142,7 @@ pytest -m integration  # API endpoint checks
 pytest -m e2e          # multi-step user journeys
 ```
 
-The suite runs in roughly 2 seconds (290+ tests). The predictor is fit once per session via a session-scoped fixture.
+The suite runs in a few seconds. The predictor is fit once per session via a session-scoped fixture.
 
 ## ML evaluation
 
@@ -173,23 +186,30 @@ src/gauge/
     models.py        Session, SessionEstimate, request/response schemas
     store.py         InMemorySessionStore (thread-safe, UUID-keyed)
     sqlite_store.py  SqliteSessionStore (survives restarts)
+  saved_estimates/
+    models.py        SavedEstimate model + SavedEstimateStore protocol
+                     InMemorySavedEstimateStore (tests / GAUGE_NO_PERSIST=1)
+    sqlite_store.py  SqliteSavedEstimateStore (default; WAL, user-scoped)
   api.py             FastAPI app factory; all endpoints including session flow
   main.py            Entry point: model load-or-train, app startup
   eval.py            Evaluation script: coverage, MAE, ablations, figures
 frontend/
   src/
-    App.tsx          Brand header + IntakeWizard (single flow, no tabs)
+    App.tsx          Brand header + nav (Estimator / How it works)
     api.ts           Typed client for the session-based backend API
     components/
       IntakeWizard.tsx  4-step flow: demographics → PDF upload → confirm → estimate
                         Step 4 includes what-if chart and plan Q&A inline
+                        Landing screen shows saved estimates for returning users
+      Blog.tsx          "How it works" writeup with inline SVG diagrams
       WhatIfChart.tsx   Recharts component rendering the OOP sweep
       Select.tsx        Generic select input
       Slider.tsx        Range slider with formatted label
       Toggle.tsx        Binary toggle (sex, smoker)
 tests/
-  unit/              Logic tests: models, calculator, predictor, OOP interval
-  integration/       Endpoint tests via FastAPI TestClient
+  unit/              Logic tests: models, calculator, predictor, OOP interval,
+                     saved-estimate stores (InMemory + SQLite)
+  integration/       Endpoint tests via FastAPI TestClient (incl. saved estimates)
   e2e/               Multi-step user journey tests
 reports/
   figures/           PNG + SVG figures from gauge.eval

@@ -17,10 +17,10 @@ forces a clean retrain instead of silently reusing the old model.
 
 Persistence
 -----------
-Sessions and uploaded documents are stored in a SQLite database at
-``~/.cache/gauge/gauge.db`` by default.  Override the path
-with the ``GAUGE_DB_PATH`` environment variable.  The in-memory
-stores are used instead when ``GAUGE_NO_PERSIST=1`` is set.
+Sessions, uploaded documents, and saved estimates are stored in a SQLite
+database at ``~/.cache/gauge/gauge.db`` by default.  Override the path
+with the ``GAUGE_DB_PATH`` environment variable.  The in-memory stores are
+used instead when ``GAUGE_NO_PERSIST=1`` is set.
 """
 
 from __future__ import annotations
@@ -40,6 +40,8 @@ from gauge.plan_extract.extractor import PlanExtractor
 from gauge.predictor.dataset import load_dataset
 from gauge.predictor.meps import load_meps
 from gauge.predictor.model import CostPredictor
+from gauge.saved_estimates.models import InMemorySavedEstimateStore
+from gauge.saved_estimates.sqlite_store import SqliteSavedEstimateStore
 from gauge.session.sqlite_store import SqliteSessionStore
 from gauge.session.store import InMemorySessionStore
 
@@ -235,6 +237,22 @@ def _make_session_store() -> SqliteSessionStore | InMemorySessionStore:
     return SqliteSessionStore(_DB_PATH)
 
 
+def _make_saved_estimate_store() -> SqliteSavedEstimateStore | InMemorySavedEstimateStore:
+    """Return the appropriate saved-estimate store based on env configuration.
+
+    Returns
+    -------
+    SqliteSavedEstimateStore or InMemorySavedEstimateStore
+        ``SqliteSavedEstimateStore`` by default; ``InMemorySavedEstimateStore``
+        when ``GAUGE_NO_PERSIST=1``.
+    """
+    if _NO_PERSIST:
+        logger.info("Saved-estimate store: in-memory (GAUGE_NO_PERSIST=1)")
+        return InMemorySavedEstimateStore()
+    logger.info("Saved-estimate store: SQLite at %s", _DB_PATH)
+    return SqliteSavedEstimateStore(_DB_PATH)
+
+
 def _make_document_store() -> SqliteDocumentStore | InMemoryDocumentStore:
     """Return the appropriate document store based on env configuration.
 
@@ -267,6 +285,7 @@ app = create_app(
     chat_service=_chat_service,
     session_store=_make_session_store(),
     plan_extractor=PlanExtractor(llm=_llm),
+    saved_estimate_store=_make_saved_estimate_store(),
 )
 
 # ---------------------------------------------------------------------------
