@@ -126,7 +126,7 @@ export default function Blog() {
           The MEPS data didn't come clean. Variable names change between
           survey years (AGE21X in 2021 → AGE22X in 2022) and  BMI lives in a
           separate "Self-Administered Questionnaire" file. So not only did I have 
-          to combine the seperate files but also be prepared for missing BMI as people may or may not have filled out the optional questionnaires.
+          to combine the separate files but also be prepared for missing BMI as people may or may not have filled out the optional questionnaires.
         </p>
 
         <DataPipelineDiagram />
@@ -155,7 +155,7 @@ export default function Blog() {
           used to give the user a real number to work off of. The mean and the median
           give the user a good estimate. They need both because people in general have
           lower costs most years, but the mean will show the effect of the sometimes 
-          catastrophically higher years that could be possible (the median won't show this).
+          catastrophically higher years that could be possible.
         </p>
         <p className="mb-4 leading-relaxed">
           The other two models I used predict the 10th and 90th percentile. This would
@@ -193,13 +193,21 @@ export default function Blog() {
             the guarantee holds even on small sets.
           </li>
           <li>
-            When predicting the raw interval is expanded by <em>q̂</em>:{" "}
+            When predicting, the raw interval is expanded by <em>q̂</em>:{" "}
             <code className="rounded bg-slate-100 px-1 py-0.5 text-xs">
               [q_lo(x) − q̂, q_hi(x) + q̂]
             </code>
             . This is the conformal interval, and it's guaranteed to cover the
             true cost at least 80% of the time for any data distribution,
-            with no normality assumption and no parametric model.
+            with no normality assumption and no parametric model. While any 
+            other distribution would require a normal bell curve or at least a 
+            mathematical parametric model 
+             <a href="https://arxiv.org/abs/2107.07511"
+                target="_blank"
+                rel="noreferrer"
+                className="text-brand-600 underline underline-offset-2 hover:text-brand-700"
+            >(Angelopoulos & Bates, 2022)</a>. 
+
           </li>
         </ol>
 
@@ -208,10 +216,10 @@ export default function Blog() {
         </h3>
         <p className="mb-4 leading-relaxed">
           Once I have a conformal interval on total charges, I need to convert
-          it into an out-of-pocket interval under the user's actual plan. The
-          way that these plans work is by continuously going up until they reach the Out of Pocket Maximum (OOP max).
-          This allows me to simply apply the charge interval with the ordering preserved. If the deductible is hit then the upper bound starts
-          to collapse towards the OOP max.
+          it into an out-of-pocket interval under the user's actual plan. 
+          Because higher total charges always produce equal or higher 
+          out-of-pocket costs, I can run each bound of the charge interval 
+          through the plan logic independently and the output is still a valid interval.
         </p>
       </section>
       <section className="mb-16">
@@ -234,8 +242,9 @@ export default function Blog() {
           dataset, but I decided that that simply wasn't good enough if I wanted to create an application
           with real meaning. Integrating the MEPS data, while worthwhile, was time consuming and frustrating
           as all of the files were different and needed to be adjusted in order for the merge to work.
-          A real breakthrough I had was with the CQR because this gave the numbers a real use in ways that
-          a single number just wouldn't do.
+          A real breakthrough was adopting CQR. I hadn't used it before, so I did some research and landed 
+          on it as the right tool. It transformed a single overconfident number into a range with a formal 
+          statistical guarantee, which felt much more honest given how unpredictable healthcare costs actually are.
         </p>
 
         <p className="mb-4 leading-relaxed">
@@ -244,6 +253,14 @@ export default function Blog() {
           it comes to training the model. The model does not even touch upon already diagnosed illnesses. 
           Chronic illnesses can have a massive effect on healthcare costs.
         </p>
+
+        <p className="mb-4 leading-relaxed">
+          This is the first project that I have completed that has both machine learning and UI aspects.
+           Building both at once took real adjustment; I've built models and I've built websites, but integrating them into a coherent product is a different challenge
+           If I were to do it again would speak to more people at the beginning of the project to figure out what they would want out of this project.
+           Originally I was only working to create a tool to help me, it wasn't until later that I thought to expand it to be the full end to end service that it is now.
+           This change led to me needing to re-develop the product multiple times until I got to this final version.
+           </p>
 
       </section>
 
@@ -345,7 +362,7 @@ function ArchDiagram() {
         {/* ── LLM cloud ────────────────────────────────────────────────── */}
         <ellipse cx="630" cy="50" rx="44" ry="24" fill="#fefce8" stroke="#fde68a" strokeWidth="1.5" />
         <text x="630" y="46" textAnchor="middle" fontSize="9" fontWeight="600" fill="#92400e">LLM API</text>
-        <text x="630" y="60" textAnchor="middle" fontSize="8.5" fill="#b45309">Claude / OpenAI</text>
+        <text x="630" y="60" textAnchor="middle" fontSize="8.5" fill="#b45309">Claude</text>
         <line x1="440" y1="105" x2="587" y2="60" stroke="#94a3b8" strokeWidth="1" strokeDasharray="4 3" markerEnd="url(#arrowhead)" />
       </svg>
     </div>
