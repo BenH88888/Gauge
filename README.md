@@ -4,7 +4,7 @@
 
 That one question is surprisingly hard to answer. Your premium is visible. Everything else — deductibles, coinsurance, copays, OOP max, and how all of those interact with your health profile — is not. Gauge makes it answerable: you enter your demographics and your plan, and Gauge returns a calibrated out-of-pocket interval with an honest 80% coverage guarantee, not a single guess dressed up as precision.
 
-<!-- Demo: replace this comment with a Loom thumbnail link + GIF once recorded -->
+<video src="demo.mp4" controls width="100%" title="Gauge demo"></video>
 
 ## The signature result
 
