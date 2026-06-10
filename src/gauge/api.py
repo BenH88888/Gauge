@@ -45,6 +45,11 @@ from gauge.predictor.whatif import (
     WhatIfResponse,
     sweep,
 )
+from gauge.saved_estimates.models import (
+    InMemorySavedEstimateStore,
+    SavedEstimate,
+    SavedEstimateStore,
+)
 from gauge.session.models import (
     AttachDocumentResponse,
     ConfirmPlanRequest,
@@ -52,11 +57,6 @@ from gauge.session.models import (
     CreateSessionResponse,
     Session,
     SessionEstimate,
-)
-from gauge.saved_estimates.models import (
-    InMemorySavedEstimateStore,
-    SavedEstimate,
-    SavedEstimateStore,
 )
 from gauge.session.store import InMemorySessionStore, SessionStore
 
